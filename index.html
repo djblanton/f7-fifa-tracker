@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Furious 7 · World Cup Pool</title>
+<style>
+  :root{
+    --ink:#0a0b0f;
+    --carbon:#12141b;
+    --carbon2:#181b24;
+    --line:#242835;
+    --line2:#2f3546;
+    --dim:#707a8f;
+    --text:#e8ecf4;
+    --nitro:#3df5c4;      /* nitrous green */
+    --nitro-dim:#1a6b54;
+    --nitro-glow:rgba(61,245,196,.16);
+    --amber:#ff8c42;      /* speedometer amber */
+    --red:#ff4d4d;
+    --gold:#ffd15c;
+    --purple:#a682ff;
+    --font:"Inter",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--font);min-height:100vh;
+    background:
+      radial-gradient(1000px 500px at 85% -10%, rgba(61,245,196,.05), transparent 60%),
+      radial-gradient(800px 400px at 0% 110%, rgba(255,140,66,.04), transparent 55%),
+      var(--ink);}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px;}
+
+  /* header */
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+    padding:10px 0 20px;border-bottom:1px solid var(--line);margin-bottom:8px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--nitro);text-transform:uppercase;}
+  .brand h1{margin:0;font-size:34px;font-weight:900;letter-spacing:-.03em;line-height:.95;
+    background:linear-gradient(92deg,#fff 20%,var(--nitro) 120%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .brand .tag{color:var(--dim);font-size:12.5px;letter-spacing:.02em;}
+  .tabs{display:flex;gap:4px;background:var(--carbon);border:1px solid var(--line);border-radius:11px;padding:4px;}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+    padding:8px 14px;border-radius:8px;cursor:pointer;border:none;background:transparent;transition:.15s;font-weight:600;}
+  .tab.on{background:var(--nitro);color:var(--ink);font-weight:800;}
+
+  /* leaderboard */
+  .board{margin-top:20px;display:flex;flex-direction:column;gap:9px;}
+  .row{display:grid;grid-template-columns:34px 1fr auto;gap:14px;align-items:center;
+    background:var(--carbon);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;transition:.2s;}
+  .row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;}
+  .row.p1::before{background:var(--gold);}
+  .row.p2::before{background:#c7cede;}
+  .row.p3::before{background:var(--amber);}
+  .rank{font-family:var(--mono);font-size:20px;font-weight:800;color:var(--dim);text-align:center;}
+  .row.p1 .rank{color:var(--gold);}.row.p2 .rank{color:#c7cede;}.row.p3 .rank{color:var(--amber);}
+  .who{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .who .nm{font-size:17px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;}
+  .who .champ{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.04em;}
+  .who .champ .alive{color:var(--nitro);}
+  .who .champ .out{color:var(--red);text-decoration:line-through;opacity:.8;}
+  .score{text-align:right;display:flex;flex-direction:column;gap:3px;}
+  .score .pts{font-family:var(--mono);font-size:24px;font-weight:800;letter-spacing:-.02em;}
+  .score .ceil{font-family:var(--mono);font-size:11px;color:var(--dim);}
+  .score .ceil b{color:var(--amber);font-weight:700;}
+
+  /* potential bar */
+  .barwrap{grid-column:1 / -1;margin-top:4px;height:5px;background:var(--carbon2);border-radius:99px;overflow:hidden;position:relative;}
+  .bar-earned{position:absolute;left:0;top:0;bottom:0;background:var(--nitro);border-radius:99px;}
+  .bar-poss{position:absolute;top:0;bottom:0;background:rgba(255,140,66,.35);border-radius:99px;}
+
+  .legend{display:flex;gap:18px;margin:18px 2px 0;font-family:var(--mono);font-size:11px;color:var(--dim);flex-wrap:wrap;}
+  .legend span{display:flex;align-items:center;gap:7px;}
+  .dot{width:10px;height:10px;border-radius:3px;}
+  .dot.e{background:var(--nitro);}.dot.p{background:rgba(255,140,66,.5);}
+
+  /* admin */
+  .admin{margin-top:20px;}
+  .admin .intro{color:var(--dim);font-size:13px;line-height:1.5;margin-bottom:16px;max-width:64ch;}
+  .rd{margin-bottom:22px;}
+  .rd h3{font-size:13px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--nitro);
+    margin:0 0 10px;display:flex;align-items:center;gap:10px;}
+  .rd h3 .ct{color:var(--dim);font-weight:400;}
+  .matchgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;}
+  .m{background:var(--carbon);border:1px solid var(--line);border-radius:11px;padding:5px;display:flex;flex-direction:column;gap:4px;}
+  .m .team{display:flex;align-items:center;gap:8px;padding:12px 12px;border-radius:7px;cursor:pointer;background:var(--carbon2);
+    border:1px solid transparent;font-size:13.5px;font-weight:600;transition:.12s;min-height:46px;}
+  .m .team:hover{background:#1e2331;}
+  .m .team.win{background:rgba(61,245,196,.13);border-color:var(--nitro);color:#eafff9;font-weight:800;}
+  .m .team.win::after{content:"✓";margin-left:auto;color:var(--nitro);font-weight:800;}
+  .m .team.win.locked{border-color:var(--purple);background:rgba(166,130,255,.14);color:#f1ecff;}
+  .m .team.win.locked::after{content:"🔒";color:var(--purple);font-size:12px;}
+  .m .team .flag{font-size:15px;}
+  .m .team.tbd{opacity:.4;cursor:default;font-style:italic;font-weight:500;}
+  .m .team.tbd:hover{background:var(--carbon2);}
+  .vs{text-align:center;font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:.2em;}
+
+  .espnstatus{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--carbon);
+    border:1px solid var(--line);border-radius:9px;padding:10px 13px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;}
+  .espnstatus b{color:var(--text);}
+  .espnstatus .ok{color:var(--nitro);}
+  .espnstatus .err{color:var(--red);}
+
+  .savebar{position:sticky;bottom:12px;margin-top:20px;display:flex;gap:10px;justify-content:center;z-index:10;}
+  .statebar{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;}
+  .sbtn{font-family:var(--mono);font-size:12px;letter-spacing:.06em;padding:12px 16px;border-radius:9px;
+    background:var(--carbon);border:1px solid var(--line2);color:var(--text);cursor:pointer;transition:.14s;font-weight:600;min-height:44px;}
+  .sbtn:hover{background:var(--carbon2);border-color:var(--nitro);color:var(--nitro);}
+  .sbtn.danger:hover{border-color:var(--red);color:var(--red);}
+  .statebox{width:100%;margin-top:10px;height:80px;background:var(--ink);border:1px solid var(--line2);border-radius:9px;
+    color:var(--nitro);font-family:var(--mono);font-size:11px;padding:11px;resize:vertical;}
+
+  /* forecast */
+  .fc-intro{color:var(--dim);font-family:var(--mono);font-size:13px;padding:20px 2px;}
+  .fc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 14px;flex-wrap:wrap;}
+  .fc-title{font-size:20px;font-weight:800;letter-spacing:-.01em;}
+  .fc-sub{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.04em;margin-top:3px;}
+  .fc-board{display:flex;flex-direction:column;gap:8px;}
+  .fc-row{display:grid;grid-template-columns:26px 150px 1fr auto auto;gap:12px;align-items:center;
+    background:var(--carbon);border:1px solid var(--line);border-radius:12px;padding:12px 15px;}
+  .fc-rank{font-family:var(--mono);font-size:15px;font-weight:800;color:var(--dim);text-align:center;}
+  .fc-who{min-width:0;}
+  .fc-nm{font-size:15px;font-weight:800;}
+  .fc-champ{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fc-out{color:var(--red);}
+  .fc-barwrap{height:8px;background:var(--carbon2);border-radius:99px;overflow:hidden;}
+  .fc-bar{height:100%;background:linear-gradient(90deg,var(--nitro),var(--amber));border-radius:99px;transition:width .5s;}
+  .fc-pct{font-family:var(--mono);font-size:19px;font-weight:800;text-align:right;min-width:64px;}
+  .fc-pct span{font-size:12px;color:var(--dim);font-weight:600;}
+  .fc-avg{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;min-width:56px;}
+  .fc-note{margin-top:16px;padding:13px 15px;background:rgba(255,140,66,.06);border:1px solid rgba(255,140,66,.2);
+    border-radius:10px;font-size:12px;line-height:1.55;color:#c9b8a6;}
+  @media(max-width:540px){
+    .fc-row{grid-template-columns:22px 1fr auto;gap:9px;}
+    .fc-barwrap{display:none;}
+    .fc-avg{display:none;}
+  }
+  .exp{font-family:var(--mono);font-size:11.5px;color:var(--dim);text-align:center;margin-top:14px;line-height:1.6;}
+
+  footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);
+    font-size:10.5px;color:var(--dim);letter-spacing:.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  @media(max-width:540px){
+    .brand h1{font-size:27px;}
+    .row{grid-template-columns:28px 1fr auto;padding:12px 13px;gap:10px;}
+    .score .pts{font-size:20px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="eyebrow">2026 World Cup · Knockouts</span>
+      <h1>FURIOUS SEVEN</h1>
+      <span class="tag">Six brackets. One champion. No brakes.</span>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-view="standings">Standings</button>
+      <button class="tab" data-view="forecast">Forecast</button>
+      <button class="tab" data-view="admin">Results</button>
+    </div>
+  </header>
+
+  <div id="standings"></div>
+  <div id="forecast" style="display:none;"></div>
+  <div id="admin" class="admin" style="display:none;"></div>
+
+  <footer>
+    <span id="foot-status">— matches scored —</span>
+    <span>F7 · scale 25·50·100·200·400 · max 2000</span>
+  </footer>
+</div>
+
+<script>
+/* ============ FIELD ============ */
+const FLAG={"Germany":"🇩🇪","Paraguay":"🇵🇾","France":"🇫🇷","Sweden":"🇸🇪","South Africa":"🇿🇦","Canada":"🇨🇦","Netherlands":"🇳🇱","Morocco":"🇲🇦","Portugal":"🇵🇹","Croatia":"🇭🇷","Spain":"🇪🇸","Austria":"🇦🇹","United States":"🇺🇸","Bosnia-Herz":"🇧🇦","Belgium":"🇧🇪","Senegal":"🇸🇳","Brazil":"🇧🇷","Japan":"🇯🇵","Ivory Coast":"🇨🇮","Norway":"🇳🇴","Mexico":"🇲🇽","Ecuador":"🇪🇨","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Congo DR":"🇨🇩","Argentina":"🇦🇷","Cape Verde":"🇨🇻","Australia":"🇦🇺","Egypt":"🇪🇬","Switzerland":"🇨🇭","Algeria":"🇩🇿","Colombia":"🇨🇴","Ghana":"🇬🇭"};
+
+const R32_PAIRS=[
+ ["Germany","Paraguay"],["France","Sweden"],["South Africa","Canada"],["Netherlands","Morocco"],
+ ["Portugal","Croatia"],["Spain","Austria"],["United States","Bosnia-Herz"],["Belgium","Senegal"],
+ ["Brazil","Japan"],["Ivory Coast","Norway"],["Mexico","Ecuador"],["England","Congo DR"],
+ ["Argentina","Cape Verde"],["Australia","Egypt"],["Switzerland","Algeria"],["Colombia","Ghana"]
+];
+
+/* Elo ratings (World Football Elo scale, ~Jul 2026). Relative gaps drive the forecast. */
+const ELO={
+ "Argentina":2140,"Spain":2145,"France":2135,"England":2045,"Brazil":2030,"Colombia":2000,
+ "Portugal":1990,"Netherlands":1975,"Germany":1965,"Croatia":1945,"Belgium":1935,"Morocco":1900,
+ "United States":1830,"Switzerland":1855,"Mexico":1810,"Japan":1840,"Senegal":1860,"Ecuador":1820,
+ "Ivory Coast":1790,"Sweden":1800,"Austria":1815,"Norway":1810,"Egypt":1770,"Australia":1750,
+ "Canada":1770,"Paraguay":1760,"South Africa":1720,"Algeria":1780,"Ghana":1740,"Congo DR":1730,
+ "Cape Verde":1680,"Bosnia-Herz":1785
+};
+function winProb(a,b){const ra=ELO[a]??1700,rb=ELO[b]??1700;return 1/(1+Math.pow(10,(rb-ra)/400));}
+
+const ROUNDS=[
+ {key:"r32",name:"Round of 32",pts:25,m:16},
+ {key:"r16",name:"Round of 16",pts:50,m:8},
+ {key:"r8", name:"Quarterfinals",pts:100,m:4},
+ {key:"r4", name:"Semifinals",pts:200,m:2},
+ {key:"r2", name:"Final",pts:400,m:1},
+];
+
+/* ============ PLAYERS — the single source of truth. Add/edit here only. ============ */
+const PLAYERS={
+ "Diego":{r32:["Germany","France","Canada","Netherlands","Croatia","Spain","United States","Belgium","Brazil","Norway","Mexico","England","Argentina","Egypt","Switzerland","Colombia"],
+   r16:["France","Netherlands","Spain","Belgium","Brazil","England","Argentina","Colombia"],
+   r8:["France","Spain","England","Argentina"],r4:["Spain","Argentina"],r2:["Spain"]},
+ "Mak":{r32:["Germany","France","Canada","Morocco","Portugal","Spain","United States","Senegal","Brazil","Ivory Coast","Ecuador","England","Argentina","Australia","Switzerland","Colombia"],
+   r16:["France","Morocco","Spain","United States","Ivory Coast","England","Argentina","Colombia"],
+   r8:["France","Spain","England","Argentina"],r4:["France","Argentina"],r2:["Argentina"]},
+ "Kyler":{r32:["Germany","France","Canada","Morocco","Croatia","Spain","United States","Belgium","Brazil","Norway","Mexico","England","Argentina","Egypt","Switzerland","Colombia"],
+   r16:["France","Morocco","Spain","United States","Brazil","Mexico","Argentina","Colombia"],
+   r8:["France","Spain","Brazil","Argentina"],r4:["France","Brazil"],r2:["France"]},
+ "Ben":{r32:["Germany","France","Canada","Netherlands","Portugal","Spain","United States","Belgium","Brazil","Ivory Coast","Mexico","England","Argentina","Australia","Switzerland","Colombia"],
+   r16:["France","Netherlands","Spain","Belgium","Brazil","Mexico","Argentina","Colombia"],
+   r8:["France","Spain","Brazil","Argentina"],r4:["Spain","Argentina"],r2:["Spain"]},
+ "Alex":{r32:["Germany","France","Canada","Netherlands","Portugal","Spain","United States","Belgium","Brazil","Norway","Mexico","England","Argentina","Egypt","Switzerland","Colombia"],
+   r16:["France","Netherlands","Spain","United States","Brazil","Mexico","Argentina","Colombia"],
+   r8:["France","Spain","Brazil","Argentina"],r4:["France","Brazil"],r2:["Brazil"]},
+ "Sid":{r32:["Germany","France","Canada","Netherlands","Portugal","Spain","United States","Belgium","Brazil","Norway","Mexico","England","Argentina","Egypt","Switzerland","Colombia"],
+   r16:["France","Netherlands","Spain","Belgium","Brazil","England","Argentina","Switzerland"],
+   r8:["France","Spain","Brazil","Argentina"],r4:["France","Argentina"],r2:["France"]},
+};
+
+/* ============ RESULTS — actual winners as games finish. null = not played yet. ============ */
+/* Populated automatically by the ESPN adapter (below). No hardcoded winners: every round */
+/* starts null and gets backfilled from finished fixtures. A manual click in the Results tab */
+/* sets a slot AND marks it human-locked (LOCKED) so the poller will never overwrite it — */
+/* click the locked winner again to clear both the result and the lock. */
+const RESULTS_DEFAULT={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
+const LOCKED_DEFAULT={r32:Array(16).fill(false),r16:Array(8).fill(false),r8:Array(4).fill(false),r4:Array(2).fill(false),r2:Array(1).fill(false)};
+const ESPN_STATUS_DEFAULT={lastPoll:null,lastError:null,lastWritten:0};
+const LS_KEY="f7wc_state_v2";
+
+function loadState(){
+  const fallback={results:structuredClone(RESULTS_DEFAULT),locked:structuredClone(LOCKED_DEFAULT),espn:structuredClone(ESPN_STATUS_DEFAULT)};
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return fallback;
+    const parsed=JSON.parse(raw);
+    for(const r of ROUNDS){
+      if(!Array.isArray(parsed?.results?.[r.key])||parsed.results[r.key].length!==r.m) return fallback;
+      if(!Array.isArray(parsed?.locked?.[r.key])||parsed.locked[r.key].length!==r.m) return fallback;
+    }
+    if(!parsed.espn) parsed.espn=structuredClone(ESPN_STATUS_DEFAULT);
+    return parsed;
+  }catch(e){ return fallback; }
+}
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({results:RESULTS,locked:LOCKED,espn:ESPN_STATUS})); }
+  catch(e){ /* storage full/blocked — state still lives in memory this session */ }
+}
+const _state=loadState();
+let RESULTS=_state.results, LOCKED=_state.locked, ESPN_STATUS=_state.espn;
+function saveResults(){ saveState(); }
+
+/* ============ ESPN ADAPTER ============ */
+// ESPN displayName -> this bracket's team name. Only entry needed: the rest of the 32 already match.
+const ESPN_NAME_MAP={"Bosnia-Herzegovina":"Bosnia-Herz"};
+const KNOWN_TEAMS=new Set(Object.keys(FLAG));
+function normalizeTeam(espnName){
+  const mapped=ESPN_NAME_MAP[espnName]??espnName;
+  if(!KNOWN_TEAMS.has(mapped)) console.warn(`[ESPN adapter] unmapped team name "${espnName}" (normalized "${mapped}") — not one of the 32 bracket teams.`);
+  return mapped;
+}
+
+// Approx real-world date window per round — used only as a non-blocking sanity check.
+// Slot resolution itself is by feeder-pair match (see below), which is unambiguous by construction.
+const ROUND_WINDOWS={
+  r32:["2026-06-28","2026-07-04"], r16:["2026-07-04","2026-07-07"], r8:["2026-07-09","2026-07-11"],
+  r4:["2026-07-14","2026-07-19"], r2:["2026-07-19","2026-07-19"],
+};
+function checkRoundWindow(key,isoDate){
+  const [s,e]=ROUND_WINDOWS[key], d=isoDate.slice(0,10);
+  if(d<s||d>e) console.warn(`[ESPN adapter] ${key} fixture dated ${d} falls outside expected window ${s}..${e} — double-check the mapping.`);
+}
+
+const ESPN_KNOCKOUT_START="20260628", ESPN_TOURNAMENT_END="20260719";
+function rollingWindow(){
+  const today=new Date(), lookahead=new Date(today.getTime()+3*86400000);
+  let end=lookahead.toISOString().slice(0,10).replace(/-/g,"");
+  if(end>ESPN_TOURNAMENT_END) end=ESPN_TOURNAMENT_END;
+  return {start:ESPN_KNOCKOUT_START, end};
+}
+
+// Flatten ESPN's scoreboard payload into finished fixtures: {teams:[a,b], winner, date}
+function extractFixtures(data){
+  const out=[];
+  for(const ev of (data.events||[])){
+    const comp=ev.competitions?.[0]; if(!comp) continue;
+    const competitors=comp.competitors||[];
+    if(competitors.length!==2) continue;
+    const completed=comp.status?.type?.completed===true;
+    const teams=competitors.map(c=>normalizeTeam(c.team?.displayName||""));
+    const winnerComp=competitors.find(c=>c.winner===true);
+    out.push({teams, winner:winnerComp?normalizeTeam(winnerComp.team.displayName):null, completed, date:comp.date||ev.date});
+  }
+  return out;
+}
+function findFixture(fixtures,a,b){
+  return fixtures.find(f=>f.teams.includes(a)&&f.teams.includes(b));
+}
+
+// One poll cycle: fetch, then walk rounds in order so R32 writes unlock R16 feeders in the same pass.
+async function pollEspn(){
+  try{
+    const {start,end}=rollingWindow();
+    const url=`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${start}-${end}`;
+    const res=await fetch(url);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const fixtures=extractFixtures(data);
+    let written=0;
+    ROUNDS.forEach((r,ri)=>{
+      for(let mi=0;mi<r.m;mi++){
+        if(LOCKED[r.key][mi]) continue;           // human override — never touch
+        if(RESULTS[r.key][mi]!==null) continue;   // already resolved
+        const [a,b]=actualFeeders(ri,mi);
+        if(!a||!b) continue;                      // feeders not known yet this pass
+        const fx=findFixture(fixtures,a,b);
+        if(fx && fx.completed && fx.winner){
+          RESULTS[r.key][mi]=fx.winner;
+          checkRoundWindow(r.key, fx.date);
+          written++;
+        }
+      }
+    });
+    if(written>0){ cascadeResults(); forecastCache=null; }
+    ESPN_STATUS={lastPoll:new Date().toISOString(), lastError:null, lastWritten:written};
+    saveState();
+  }catch(e){
+    ESPN_STATUS={...ESPN_STATUS, lastPoll:new Date().toISOString(), lastError:String(e.message||e)};
+    saveState();
+    console.warn("[ESPN adapter] poll failed, keeping cached/localStorage results:", e);
+  }finally{
+    renderAdmin(); renderStandings();
+    const activeTab=document.querySelector(".tab.on")?.dataset.view;
+    if(activeTab==="forecast") renderForecast(false);
+  }
+}
+
+/* ============ ENGINE ============ */
+// actual feeders for a results match: r32 from pairs, later from actual results
+function actualFeeders(ri,mi){
+  if(ri===0)return R32_PAIRS[mi];
+  return [RESULTS[ROUNDS[ri-1].key][mi*2],RESULTS[ROUNDS[ri-1].key][mi*2+1]];
+}
+// a player's pick for (round, match)
+function pickAt(pl,ri,mi){return PLAYERS[pl][ROUNDS[ri].key][mi];}
+
+// EARNED: pick is correct if it matches the actual winner of that match slot
+function earned(pl){
+  let s=0;
+  ROUNDS.forEach((r,ri)=>{
+    RESULTS[r.key].forEach((win,mi)=>{
+      if(win!==null && pickAt(pl,ri,mi)===win) s+=r.pts;
+    });
+  });
+  return s;
+}
+// STILL ALIVE: a player's pick for a slot is still possible if that team hasn't been eliminated
+// A team is eliminated if, in any completed match, it was a feeder but not the winner.
+function eliminatedTeams(){
+  const dead=new Set();
+  ROUNDS.forEach((r,ri)=>{
+    RESULTS[r.key].forEach((win,mi)=>{
+      if(win!==null){
+        const [a,b]=actualFeeders(ri,mi);
+        if(a&&a!==win)dead.add(a);
+        if(b&&b!==win)dead.add(b);
+      }
+    });
+  });
+  return dead;
+}
+// MAX POSSIBLE = earned + sum of points for unplayed slots where the player's pick is still alive
+function maxPossible(pl){
+  const dead=eliminatedTeams();
+  let s=0;
+  ROUNDS.forEach((r,ri)=>{
+    RESULTS[r.key].forEach((win,mi)=>{
+      const pick=pickAt(pl,ri,mi);
+      if(win!==null){ if(pick===win)s+=r.pts; }        // already earned
+      else { if(!dead.has(pick))s+=r.pts; }             // still gettable
+    });
+  });
+  return s;
+}
+function championAlive(pl){
+  return !eliminatedTeams().has(PLAYERS[pl].r2[0]);
+}
+function matchesScored(){
+  let n=0;ROUNDS.forEach(r=>RESULTS[r.key].forEach(w=>{if(w!==null)n++;}));return n;
+}
+
+/* ============ RENDER: STANDINGS ============ */
+function renderStandings(){
+  const el=document.getElementById("standings");
+  const rows=Object.keys(PLAYERS).map(pl=>({
+    pl, earned:earned(pl), max:maxPossible(pl), champ:PLAYERS[pl].r2[0], champAlive:championAlive(pl)
+  }));
+  // sort: earned desc, then max desc, then name
+  rows.sort((a,b)=> b.earned-a.earned || b.max-a.max || a.pl.localeCompare(b.pl));
+  const globalMax=Math.max(...rows.map(r=>r.max),1);
+
+  let h=`<div class="board">`;
+  rows.forEach((r,i)=>{
+    const rank=i+1;
+    const cls=rank<=3?`p${rank}`:"";
+    const champTxt=r.champAlive
+      ? `champion: <span class="alive">${FLAG[r.champ]} ${r.champ}</span>`
+      : `champion: <span class="out">${FLAG[r.champ]} ${r.champ}</span>`;
+    const ePct=(r.earned/globalMax*100).toFixed(1);
+    const pPct=(r.max/globalMax*100).toFixed(1);
+    h+=`<div class="row ${cls}">
+      <div class="rank">${rank}</div>
+      <div class="who">
+        <div class="nm">${r.pl}</div>
+        <div class="champ">${champTxt}</div>
+      </div>
+      <div class="score">
+        <div class="pts">${r.earned}</div>
+        <div class="ceil">ceiling <b>${r.max}</b></div>
+      </div>
+      <div class="barwrap">
+        <div class="bar-poss" style="left:${ePct}%;width:${(pPct-ePct)}%"></div>
+        <div class="bar-earned" style="width:${ePct}%"></div>
+      </div>
+    </div>`;
+  });
+  h+=`</div>
+    <div class="legend">
+      <span><span class="dot e"></span> points banked</span>
+      <span><span class="dot p"></span> still reachable (ceiling)</span>
+    </div>`;
+  el.innerHTML=h;
+  document.getElementById("foot-status").textContent=`${matchesScored()} / 31 matches scored`;
+}
+
+/* ============ RENDER: ADMIN ============ */
+function renderAdmin(){
+  const el=document.getElementById("admin");
+  const lockedCt=ROUNDS.reduce((n,r)=>n+LOCKED[r.key].filter(Boolean).length,0);
+  const autoCt=ROUNDS.reduce((n,r)=>n+RESULTS[r.key].filter((w,i)=>w!==null&&!LOCKED[r.key][i]).length,0);
+  const pollTxt=ESPN_STATUS.lastPoll?new Date(ESPN_STATUS.lastPoll).toLocaleTimeString():"never";
+  const feedTxt=ESPN_STATUS.lastError
+    ? `<span class="err">error: ${ESPN_STATUS.lastError}</span>`
+    : `<span class="ok">healthy</span>`;
+  let h=`<p class="intro">Results auto-write from ESPN as games finish (polling every 2 min). Click a team to manually set/override a winner — that locks it 🔒 so the poller won't touch it again; click the locked winner again to release the lock back to auto.</p>
+    <div class="espnstatus">ESPN feed — last poll <b>${pollTxt}</b> · auto-written <b>${autoCt}</b> · human-locked <b>${lockedCt}</b> · ${feedTxt}
+      <button class="sbtn" id="pollNow" style="margin-left:10px;padding:6px 10px;font-size:11px;">Poll now</button>
+    </div>`;
+  ROUNDS.forEach((r,ri)=>{
+    const done=RESULTS[r.key].filter(w=>w!==null).length;
+    h+=`<div class="rd"><h3>${r.name} <span class="ct">${done}/${r.m}</span></h3><div class="matchgrid">`;
+    for(let mi=0;mi<r.m;mi++){
+      const [a,b]=actualFeeders(ri,mi);
+      h+=`<div class="m">`;
+      [a,b].forEach(t=>{
+        if(t===null){h+=`<div class="team tbd">awaiting result</div>`;}
+        else{
+          const win=RESULTS[r.key][mi]===t;
+          const locked=win&&LOCKED[r.key][mi];
+          h+=`<div class="team${win?" win":""}${locked?" locked":""}" data-r="${ri}" data-m="${mi}" data-t="${t}">
+            <span class="flag">${FLAG[t]||"⚽"}</span>${t}</div>`;
+        }
+      });
+      h+=`<div class="vs">▼</div></div>`;
+    }
+    h+=`</div></div>`;
+  });
+  h+=`<div class="statebar">
+      <button class="sbtn" id="exportState">Export state</button>
+      <button class="sbtn" id="importState">Import state</button>
+      <button class="sbtn danger" id="resetState">Reset results</button>
+    </div>
+    <div class="exp">Results auto-save to this browser. <span style="color:var(--nitro)">Export state</span> gives you a JSON backup to paste back if the browser cache clears.</div>
+    <textarea id="stateBox" class="statebox" placeholder="Paste exported state here, then click Import state again to load it." style="display:none;"></textarea>`;
+  el.innerHTML=h;
+
+  el.querySelector("#pollNow").onclick=()=>pollEspn();
+
+  // export/import/reset handlers
+  const box=el.querySelector("#stateBox");
+  el.querySelector("#exportState").onclick=()=>{
+    box.style.display="block";
+    box.value=JSON.stringify({results:RESULTS,locked:LOCKED});
+    box.select();
+    try{navigator.clipboard.writeText(box.value);}catch(e){}
+    flash("#exportState","Copied ✓");
+  };
+  el.querySelector("#importState").onclick=()=>{
+    if(box.style.display==="none"){ box.style.display="block"; box.value=""; box.focus(); flash("#importState","Paste, then click again"); return; }
+    try{
+      const parsed=JSON.parse(box.value.trim());
+      const res=parsed.results||parsed; // accept old export shape (bare RESULTS) too
+      const lock=parsed.locked||structuredClone(LOCKED_DEFAULT);
+      for(const r of ROUNDS){
+        if(!Array.isArray(res[r.key])||res[r.key].length!==r.m) throw new Error("bad shape");
+        if(!Array.isArray(lock[r.key])||lock[r.key].length!==r.m) throw new Error("bad shape");
+      }
+      RESULTS=res; LOCKED=lock; cascadeResults(); saveResults();
+      renderAdmin(); renderStandings(); flash("#importState","Imported ✓");
+    }catch(e){ flash("#importState","Invalid — check the text"); }
+  };
+  el.querySelector("#resetState").onclick=()=>{
+    if(!confirm("Clear ALL entered results? Your player brackets are untouched; this only wipes match outcomes and unlocks everything for ESPN auto-write."))return;
+    RESULTS=structuredClone(RESULTS_DEFAULT); LOCKED=structuredClone(LOCKED_DEFAULT); saveResults(); renderAdmin(); renderStandings();
+  };
+
+  el.querySelectorAll(".team[data-r]").forEach(node=>{
+    node.onclick=()=>{
+      const ri=+node.dataset.r,mi=+node.dataset.m,t=node.dataset.t;
+      const key=ROUNDS[ri].key;
+      const cur=RESULTS[key][mi];
+      if(cur===t){ RESULTS[key][mi]=null; LOCKED[key][mi]=false; }   // clear -> release back to auto
+      else{ RESULTS[key][mi]=t; LOCKED[key][mi]=true; }               // set -> human lock
+      // cascade: clear downstream results (and their locks) that no longer have valid feeders
+      cascadeResults();
+      saveResults();
+      forecastCache=null;
+      renderAdmin();renderStandings();
+    };
+  });
+}
+function cascadeResults(){
+  for(let ri=1;ri<ROUNDS.length;ri++){
+    for(let mi=0;mi<ROUNDS[ri].m;mi++){
+      const [a,b]=actualFeeders(ri,mi);
+      const key=ROUNDS[ri].key;
+      const cur=RESULTS[key][mi];
+      if(cur!==null && cur!==a && cur!==b){ RESULTS[key][mi]=null; LOCKED[key][mi]=false; }
+    }
+  }
+}
+
+/* ============ MONTE CARLO FORECAST ============ */
+function simOnce(){
+  const out={};
+  out.r32=R32_PAIRS.map((pair,i)=>{
+    if(RESULTS.r32[i]!==null)return RESULTS.r32[i];
+    const[a,b]=pair;return Math.random()<winProb(a,b)?a:b;
+  });
+  for(let ri=1;ri<ROUNDS.length;ri++){
+    const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
+    for(let m=0;m<ROUNDS[ri].m;m++){
+      if(RESULTS[key][m]!==null){out[key].push(RESULTS[key][m]);continue;}
+      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<winProb(a,b)?a:b);
+    }
+  }
+  return out;
+}
+function scoreVsOutcome(pl,outcome){
+  let s=0;ROUNDS.forEach(r=>{for(let m=0;m<r.m;m++){if(PLAYERS[pl][r.key][m]===outcome[r.key][m])s+=r.pts;}});return s;
+}
+function monteCarlo(N){
+  const names=Object.keys(PLAYERS);
+  const wins={},scoreSum={};names.forEach(n=>{wins[n]=0;scoreSum[n]=0;});
+  for(let i=0;i<N;i++){
+    const outcome=simOnce();let best=-1,leaders=[];
+    names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);scoreSum[pl]+=s;
+      if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
+    leaders.forEach(pl=>wins[pl]+=1/leaders.length);
+  }
+  return names.map(pl=>({pl,winPct:100*wins[pl]/N,avg:scoreSum[pl]/N}))
+              .sort((a,b)=>b.winPct-a.winPct);
+}
+
+let forecastCache=null;
+function renderForecast(force){
+  const el=document.getElementById("forecast");
+  el.innerHTML=`<p class="fc-intro">Running 20,000 simulations…</p>`;
+  // defer so the "running" message paints
+  setTimeout(()=>{
+    if(force||!forecastCache) forecastCache=monteCarlo(20000);
+    const res=forecastCache;
+    const maxW=Math.max(...res.map(r=>r.winPct),1);
+    const played=matchesScored();
+    let h=`<div class="fc-head">
+        <div>
+          <div class="fc-title">Championship odds</div>
+          <div class="fc-sub">${played===0?"Pre-tournament forecast":`Updated for ${played} played result${played>1?"s":""}`} · 20k Monte Carlo sims · Elo-weighted</div>
+        </div>
+        <button class="sbtn" id="rerunFc">Re-run</button>
+      </div>
+      <div class="fc-board">`;
+    res.forEach((r,i)=>{
+      const champ=PLAYERS[r.pl].r2[0];
+      const alive=championAlive(r.pl);
+      const w=(r.winPct/maxW*100);
+      h+=`<div class="fc-row">
+        <div class="fc-rank">${i+1}</div>
+        <div class="fc-who">
+          <div class="fc-nm">${r.pl}</div>
+          <div class="fc-champ">${FLAG[champ]} ${champ}${alive?"":' <span class="fc-out">eliminated</span>'}</div>
+        </div>
+        <div class="fc-barwrap"><div class="fc-bar" style="width:${w}%"></div></div>
+        <div class="fc-pct">${r.winPct.toFixed(1)}<span>%</span></div>
+        <div class="fc-avg">avg ${r.avg.toFixed(0)}</div>
+      </div>`;
+    });
+    h+=`</div>
+      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar. Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.</div>`;
+    el.innerHTML=h;
+    el.querySelector("#rerunFc").onclick=()=>renderForecast(true);
+  },30);
+}
+
+/* ============ TABS ============ */
+function flash(sel,msg){
+  const b=document.querySelector(sel); if(!b)return;
+  const orig=b.textContent; b.textContent=msg;
+  setTimeout(()=>{b.textContent=orig;},1400);
+}
+document.querySelectorAll(".tab").forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
+    t.classList.add("on");
+    const v=t.dataset.view;
+    document.getElementById("standings").style.display=v==="standings"?"":"none";
+    document.getElementById("forecast").style.display=v==="forecast"?"":"none";
+    document.getElementById("admin").style.display=v==="admin"?"":"none";
+    if(v==="forecast") renderForecast(false);
+  };
+});
+
+renderStandings();
+renderAdmin();
+pollEspn();
+setInterval(pollEspn, 120000);
+</script>
+</body>
+</html>
