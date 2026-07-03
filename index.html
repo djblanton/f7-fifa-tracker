@@ -94,9 +94,13 @@
   .m .team.win.locked{border-color:var(--purple);background:rgba(166,130,255,.14);color:#f1ecff;}
   .m .team.win.locked::after{content:"🔒";color:var(--purple);font-size:12px;}
   .m .team .flag{font-size:15px;}
+  .m .team .tscore{margin-left:8px;font-family:var(--mono);font-weight:800;font-size:14px;color:var(--dim);}
+  .m .team.win .tscore{color:var(--nitro);}
   .m .team.tbd{opacity:.4;cursor:default;font-style:italic;font-weight:500;}
   .m .team.tbd:hover{background:var(--carbon2);}
   .vs{text-align:center;font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:.2em;}
+  .vs.live{color:var(--red);font-weight:800;font-size:10px;letter-spacing:.1em;animation:pulseLive 1.4s infinite;}
+  @keyframes pulseLive{0%,100%{opacity:1;}50%{opacity:.35;}}
 
   .espnstatus{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--carbon);
     border:1px solid var(--line);border-radius:9px;padding:10px 13px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;}
@@ -258,6 +262,9 @@ const _state=loadState();
 let RESULTS=_state.results, LOCKED=_state.locked, ESPN_STATUS=_state.espn;
 function saveResults(){ saveState(); }
 
+// Live/finished scoreboard cache — refreshed in full every poll, not persisted (ESPN is the source of truth for this).
+let SCORES={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
+
 /* ============ ESPN ADAPTER ============ */
 // ESPN displayName -> this bracket's team name. Only entry needed: the rest of the 32 already match.
 const ESPN_NAME_MAP={"Bosnia-Herzegovina":"Bosnia-Herz"};
@@ -287,7 +294,7 @@ function rollingWindow(){
   return {start:ESPN_KNOCKOUT_START, end};
 }
 
-// Flatten ESPN's scoreboard payload into finished fixtures: {teams:[a,b], winner, date}
+// Flatten ESPN's scoreboard payload into fixtures, live or finished: {teams, scores, state, clockSeconds, winner, date}
 function extractFixtures(data){
   const out=[];
   for(const ev of (data.events||[])){
@@ -295,9 +302,13 @@ function extractFixtures(data){
     const competitors=comp.competitors||[];
     if(competitors.length!==2) continue;
     const completed=comp.status?.type?.completed===true;
+    const state=comp.status?.type?.state||"pre"; // 'pre' | 'in' | 'post'
+    const clockSeconds=comp.status?.clock??null;  // elapsed match seconds, e.g. 5400 = 90'
     const teams=competitors.map(c=>normalizeTeam(c.team?.displayName||""));
+    const scores={};
+    competitors.forEach((c,i)=>{ scores[teams[i]]=c.score!=null?parseInt(c.score,10):null; });
     const winnerComp=competitors.find(c=>c.winner===true);
-    out.push({teams, winner:winnerComp?normalizeTeam(winnerComp.team.displayName):null, completed, date:comp.date||ev.date});
+    out.push({teams, scores, state, clockSeconds, winner:winnerComp?normalizeTeam(winnerComp.team.displayName):null, completed, date:comp.date||ev.date});
   }
   return out;
 }
@@ -317,11 +328,13 @@ async function pollEspn(){
     let written=0;
     ROUNDS.forEach((r,ri)=>{
       for(let mi=0;mi<r.m;mi++){
-        if(LOCKED[r.key][mi]) continue;           // human override — never touch
-        if(RESULTS[r.key][mi]!==null) continue;   // already resolved
         const [a,b]=actualFeeders(ri,mi);
-        if(!a||!b) continue;                      // feeders not known yet this pass
+        if(!a||!b){ SCORES[r.key][mi]=null; continue; }  // feeders not known yet this pass
         const fx=findFixture(fixtures,a,b);
+        // scores refresh every poll regardless of lock, so the Results tab always shows the live state
+        SCORES[r.key][mi]=fx?{a:fx.scores[a]??null, b:fx.scores[b]??null, state:fx.state, clockSeconds:fx.clockSeconds}:null;
+        if(LOCKED[r.key][mi]) continue;           // human override — never touch RESULTS
+        if(RESULTS[r.key][mi]!==null) continue;   // already resolved
         if(fx && fx.completed && fx.winner){
           RESULTS[r.key][mi]=fx.winner;
           checkRoundWindow(r.key, fx.date);
@@ -329,7 +342,8 @@ async function pollEspn(){
         }
       }
     });
-    if(written>0){ cascadeResults(); forecastCache=null; }
+    if(written>0) cascadeResults();
+    forecastCache=null; // live scores/clocks change even without a new written result
     ESPN_STATUS={lastPoll:new Date().toISOString(), lastError:null, lastWritten:written};
     saveState();
   }catch(e){
@@ -459,17 +473,21 @@ function renderAdmin(){
     h+=`<div class="rd"><h3>${r.name} <span class="ct">${done}/${r.m}</span></h3><div class="matchgrid">`;
     for(let mi=0;mi<r.m;mi++){
       const [a,b]=actualFeeders(ri,mi);
+      const sc=SCORES[r.key][mi];
       h+=`<div class="m">`;
-      [a,b].forEach(t=>{
+      [a,b].forEach((t,idx)=>{
         if(t===null){h+=`<div class="team tbd">awaiting result</div>`;}
         else{
           const win=RESULTS[r.key][mi]===t;
           const locked=win&&LOCKED[r.key][mi];
+          const sVal=sc?(idx===0?sc.a:sc.b):null;
+          const showScore=sc&&(sc.state==="in"||sc.state==="post")&&sVal!=null;
           h+=`<div class="team${win?" win":""}${locked?" locked":""}" data-r="${ri}" data-m="${mi}" data-t="${t}">
-            <span class="flag">${FLAG[t]||"⚽"}</span>${t}</div>`;
+            <span class="flag">${FLAG[t]||"⚽"}</span>${t}${showScore?`<span class="tscore">${sVal}</span>`:""}</div>`;
         }
       });
-      h+=`<div class="vs">▼</div></div>`;
+      const vsTxt=(sc&&sc.state==="in")?`LIVE ${Math.min(90,Math.floor((sc.clockSeconds||0)/60))}'`:"▼";
+      h+=`<div class="vs${sc&&sc.state==="in"?" live":""}">${vsTxt}</div></div>`;
     }
     h+=`</div></div>`;
   });
@@ -539,17 +557,39 @@ function cascadeResults(){
 }
 
 /* ============ MONTE CARLO FORECAST ============ */
+// Live-adjusted win probability for a match in progress: blends the pre-match Elo prior with the
+// current scoreline, weighted by how much of the match has elapsed (a lead late means more than the
+// same lead early). This is a simple heuristic, not a calibrated live-soccer win model.
+const LIVE_GOAL_WEIGHT=1.1;
+function liveWinProb(a,b,sc){
+  const prior=winProb(a,b);
+  const priorLogOdds=Math.log(prior/(1-prior));
+  const minutesElapsed=Math.max(0,(sc.clockSeconds||0)/60);
+  const timeFrac=Math.min(1,minutesElapsed/90);
+  const goalDiff=sc.a-sc.b;
+  const liveLogOdds=priorLogOdds + goalDiff*LIVE_GOAL_WEIGHT*timeFrac;
+  const p=1/(1+Math.exp(-liveLogOdds));
+  return Math.min(0.97,Math.max(0.03,p));
+}
+function effectiveProb(ri,mi,a,b){
+  const sc=SCORES[ROUNDS[ri].key][mi];
+  if(sc && sc.state==="in" && sc.a!=null && sc.b!=null) return liveWinProb(a,b,sc);
+  return winProb(a,b);
+}
+function anyMatchLive(){
+  return ROUNDS.some(r=>SCORES[r.key].some(sc=>sc&&sc.state==="in"));
+}
 function simOnce(){
   const out={};
   out.r32=R32_PAIRS.map((pair,i)=>{
     if(RESULTS.r32[i]!==null)return RESULTS.r32[i];
-    const[a,b]=pair;return Math.random()<winProb(a,b)?a:b;
+    const[a,b]=pair;return Math.random()<effectiveProb(0,i,a,b)?a:b;
   });
   for(let ri=1;ri<ROUNDS.length;ri++){
     const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
     for(let m=0;m<ROUNDS[ri].m;m++){
       if(RESULTS[key][m]!==null){out[key].push(RESULTS[key][m]);continue;}
-      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<winProb(a,b)?a:b);
+      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<effectiveProb(ri,m,a,b)?a:b);
     }
   }
   return out;
@@ -603,8 +643,11 @@ function renderForecast(force){
         <div class="fc-avg">avg ${r.avg.toFixed(0)}</div>
       </div>`;
     });
+    const liveNote=anyMatchLive()
+      ? ` A match is live right now — its sim odds are nudged from Elo toward the current scoreline as the clock runs down (a heuristic, not a calibrated live-win model), so the forecast reflects what's actually happening on the pitch.`
+      : "";
     h+=`</div>
-      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar. Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.</div>`;
+      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar. Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.${liveNote}</div>`;
     el.innerHTML=h;
     el.querySelector("#rerunFc").onclick=()=>renderForecast(true);
   },30);
