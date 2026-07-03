@@ -58,7 +58,9 @@
   .rank{font-family:var(--mono);font-size:20px;font-weight:800;color:var(--dim);text-align:center;}
   .row.p1 .rank{color:var(--gold);}.row.p2 .rank{color:#c7cede;}.row.p3 .rank{color:var(--amber);}
   .who{display:flex;flex-direction:column;gap:5px;min-width:0;}
-  .who .nm{font-size:17px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;}
+  .who .nm{font-size:17px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;
+    cursor:pointer;width:fit-content;}
+  .who .nm:hover{color:var(--nitro);text-decoration:underline;}
   .who .champ{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.04em;}
   .who .champ .alive{color:var(--nitro);}
   .who .champ .out{color:var(--red);text-decoration:line-through;opacity:.8;}
@@ -101,6 +103,7 @@
   .vs{text-align:center;font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:.2em;}
   .vs.live{color:var(--red);font-weight:800;font-size:10px;letter-spacing:.1em;animation:pulseLive 1.4s infinite;}
   @keyframes pulseLive{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .vs.sched{color:var(--amber);font-size:10px;letter-spacing:normal;font-weight:600;}
 
   .espnstatus{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--carbon);
     border:1px solid var(--line);border-radius:9px;padding:10px 13px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;}
@@ -135,6 +138,7 @@
   .fc-pct{font-family:var(--mono);font-size:19px;font-weight:800;text-align:right;min-width:64px;}
   .fc-pct span{font-size:12px;color:var(--dim);font-weight:600;}
   .fc-avg{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;min-width:56px;}
+  .fc-path{grid-column:1/-1;font-family:var(--mono);font-size:10.5px;color:var(--amber);margin-top:2px;line-height:1.5;}
   .fc-note{margin-top:16px;padding:13px 15px;background:rgba(255,140,66,.06);border:1px solid rgba(255,140,66,.2);
     border-radius:10px;font-size:12px;line-height:1.55;color:#c9b8a6;}
   @media(max-width:540px){
@@ -143,6 +147,22 @@
     .fc-avg{display:none;}
   }
   .exp{font-family:var(--mono);font-size:11.5px;color:var(--dim);text-align:center;margin-top:14px;line-height:1.6;}
+
+  /* player bracket drill-down */
+  .pbrk-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line);}
+  .pbrk-title{font-size:22px;font-weight:900;letter-spacing:-.02em;}
+  .pbrk-champ{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:auto;}
+  .pbrk-cols{display:flex;gap:16px;overflow-x:auto;padding-bottom:10px;}
+  .pbrk-col{flex:0 0 172px;display:flex;flex-direction:column;gap:10px;}
+  .pbrk-col h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:0 0 2px;}
+  .pbox{background:var(--carbon);border:1px solid var(--line);border-radius:9px;padding:10px 11px;
+    font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;min-height:20px;}
+  .pbox.correct{border-color:var(--nitro);background:rgba(61,245,196,.13);color:#eafff9;}
+  .pbox.wrong{border-color:var(--red);background:rgba(255,77,77,.10);color:#ffc7c7;}
+  .pbox.wrong .pk{text-decoration:line-through;opacity:.75;}
+  .pbox.pending{opacity:.55;}
+  .pbox .actual{display:block;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--dim);margin-top:2px;}
+  @media(max-width:540px){ .pbrk-champ{margin-left:0;width:100%;} }
 
   footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--mono);
     font-size:10.5px;color:var(--dim);letter-spacing:.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
@@ -171,6 +191,7 @@
   <div id="standings"></div>
   <div id="forecast" style="display:none;"></div>
   <div id="admin" class="admin" style="display:none;"></div>
+  <div id="playerbracket" style="display:none;"></div>
 
   <footer>
     <span id="foot-status">— matches scored —</span>
@@ -332,7 +353,7 @@ async function pollEspn(){
         if(!a||!b){ SCORES[r.key][mi]=null; continue; }  // feeders not known yet this pass
         const fx=findFixture(fixtures,a,b);
         // scores refresh every poll regardless of lock, so the Results tab always shows the live state
-        SCORES[r.key][mi]=fx?{a:fx.scores[a]??null, b:fx.scores[b]??null, state:fx.state, clockSeconds:fx.clockSeconds}:null;
+        SCORES[r.key][mi]=fx?{a:fx.scores[a]??null, b:fx.scores[b]??null, state:fx.state, clockSeconds:fx.clockSeconds, date:fx.date}:null;
         if(LOCKED[r.key][mi]) continue;           // human override — never touch RESULTS
         if(RESULTS[r.key][mi]!==null) continue;   // already resolved
         if(fx && fx.completed && fx.winner){
@@ -433,7 +454,7 @@ function renderStandings(){
     h+=`<div class="row ${cls}">
       <div class="rank">${rank}</div>
       <div class="who">
-        <div class="nm">${r.pl}</div>
+        <div class="nm" data-pl="${r.pl}">${r.pl}</div>
         <div class="champ">${champTxt}</div>
       </div>
       <div class="score">
@@ -453,6 +474,45 @@ function renderStandings(){
     </div>`;
   el.innerHTML=h;
   document.getElementById("foot-status").textContent=`${matchesScored()} / 31 matches scored`;
+  el.querySelectorAll(".nm[data-pl]").forEach(node=>{
+    node.onclick=()=>{ renderPlayerBracket(node.dataset.pl); showView("playerbracket"); };
+  });
+}
+
+/* ============ RENDER: PLAYER BRACKET ============ */
+function renderPlayerBracket(pl){
+  const el=document.getElementById("playerbracket");
+  const champ=PLAYERS[pl].r2[0];
+  const alive=championAlive(pl);
+  let h=`<div class="pbrk-head">
+      <button class="sbtn" id="pbrkBack">← Standings</button>
+      <div class="pbrk-title">${pl}'s Bracket</div>
+      <div class="pbrk-champ">champion pick: ${FLAG[champ]||"⚽"} ${champ} ${alive?'<span style="color:var(--nitro)">(alive)</span>':'<span style="color:var(--red)">(eliminated)</span>'}</div>
+    </div>
+    <div class="pbrk-cols">`;
+  ROUNDS.forEach((r,ri)=>{
+    h+=`<div class="pbrk-col"><h4>${r.name}</h4>`;
+    for(let mi=0;mi<r.m;mi++){
+      const pick=pickAt(pl,ri,mi);
+      const win=RESULTS[r.key][mi];
+      let cls="pending", actualTxt="";
+      if(win!==null){
+        if(win===pick) cls="correct";
+        else{ cls="wrong"; actualTxt=`<span class="actual">${FLAG[win]||"⚽"} ${win} won</span>`; }
+      }
+      h+=`<div class="pbox ${cls}">
+        <span class="flag">${FLAG[pick]||"⚽"}</span>
+        <span>
+          <span class="pk">${pick}</span>
+          ${actualTxt}
+        </span>
+      </div>`;
+    }
+    h+=`</div>`;
+  });
+  h+=`</div>`;
+  el.innerHTML=h;
+  el.querySelector("#pbrkBack").onclick=()=>showView("standings");
 }
 
 /* ============ RENDER: ADMIN ============ */
@@ -486,8 +546,13 @@ function renderAdmin(){
             <span class="flag">${FLAG[t]||"⚽"}</span>${t}${showScore?`<span class="tscore">${sVal}</span>`:""}</div>`;
         }
       });
-      const vsTxt=(sc&&sc.state==="in")?`LIVE ${Math.min(90,Math.floor((sc.clockSeconds||0)/60))}'`:"▼";
-      h+=`<div class="vs${sc&&sc.state==="in"?" live":""}">${vsTxt}</div></div>`;
+      let vsTxt="▼", vsCls="";
+      if(sc&&sc.state==="in"){ vsTxt=`LIVE ${Math.min(90,Math.floor((sc.clockSeconds||0)/60))}'`; vsCls=" live"; }
+      else if(sc&&sc.state==="pre"&&sc.date){
+        vsTxt=new Date(sc.date).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+        vsCls=" sched";
+      }
+      h+=`<div class="vs${vsCls}">${vsTxt}</div></div>`;
     }
     h+=`</div></div>`;
   });
@@ -597,17 +662,56 @@ function simOnce(){
 function scoreVsOutcome(pl,outcome){
   let s=0;ROUNDS.forEach(r=>{for(let m=0;m<r.m;m++){if(PLAYERS[pl][r.key][m]===outcome[r.key][m])s+=r.pts;}});return s;
 }
+// "Best path": for each player, which still-open results matter most for them winning the pool —
+// found by comparing, per open slot, P(team wins slot | player wins pool) against the unconditional
+// baseline P(team wins slot). Slots where that gap is largest are the load-bearing ones to watch.
+function describePathSlot(pl,ri,mi,team){
+  const roundName=ROUNDS[ri].name, theirPick=pickAt(pl,ri,mi);
+  if(team===theirPick) return `${team} wins the ${roundName}`;
+  const [a,b]=actualFeeders(ri,mi);
+  if(a&&b&&(theirPick===a||theirPick===b)) return `${theirPick===a?b:a} beats ${theirPick} (${roundName})`;
+  return `${theirPick} doesn't make the ${roundName}`;
+}
 function monteCarlo(N){
   const names=Object.keys(PLAYERS);
   const wins={},scoreSum={};names.forEach(n=>{wins[n]=0;scoreSum[n]=0;});
+  const openSlots=[];
+  ROUNDS.forEach((r,ri)=>{ for(let mi=0;mi<r.m;mi++){ if(RESULTS[r.key][mi]===null) openSlots.push({ri,key:r.key,mi}); } });
+  const slotId=s=>`${s.key}:${s.mi}`;
+  const baseTally={}; openSlots.forEach(s=>baseTally[slotId(s)]={});
+  const pathTally={}; names.forEach(pl=>{ pathTally[pl]={}; openSlots.forEach(s=>pathTally[pl][slotId(s)]={}); });
+
   for(let i=0;i<N;i++){
     const outcome=simOnce();let best=-1,leaders=[];
     names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);scoreSum[pl]+=s;
       if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
     leaders.forEach(pl=>wins[pl]+=1/leaders.length);
+    openSlots.forEach(s=>{
+      const team=outcome[s.key][s.mi], id=slotId(s);
+      baseTally[id][team]=(baseTally[id][team]||0)+1;
+      leaders.forEach(pl=>{ const t=pathTally[pl][id]; t[team]=(t[team]||0)+1; });
+    });
   }
-  return names.map(pl=>({pl,winPct:100*wins[pl]/N,avg:scoreSum[pl]/N}))
+
+  const bestPath={};
+  names.forEach(pl=>{
+    const denom=wins[pl];
+    const rows=openSlots.map(s=>{
+      const id=slotId(s), tally=pathTally[pl][id];
+      let team=null,count=0;
+      for(const t in tally){ if(tally[t]>count){count=tally[t];team=t;} }
+      if(!team||denom<=0) return null;
+      const condProb=count/denom;
+      const baseProb=(baseTally[id][team]||0)/N;
+      return {ri:s.ri,mi:s.mi,team,delta:condProb-baseProb,condProb};
+    }).filter(Boolean);
+    rows.sort((a,b)=>b.delta-a.delta);
+    bestPath[pl]=rows.slice(0,3).map(r=>describePathSlot(pl,r.ri,r.mi,r.team));
+  });
+
+  const rows=names.map(pl=>({pl,winPct:100*wins[pl]/N,avg:scoreSum[pl]/N}))
               .sort((a,b)=>b.winPct-a.winPct);
+  return {rows, bestPath};
 }
 
 let forecastCache=null;
@@ -617,7 +721,7 @@ function renderForecast(force){
   // defer so the "running" message paints
   setTimeout(()=>{
     if(force||!forecastCache) forecastCache=monteCarlo(20000);
-    const res=forecastCache;
+    const {rows:res, bestPath}=forecastCache;
     const maxW=Math.max(...res.map(r=>r.winPct),1);
     const played=matchesScored();
     let h=`<div class="fc-head">
@@ -632,6 +736,8 @@ function renderForecast(force){
       const champ=PLAYERS[r.pl].r2[0];
       const alive=championAlive(r.pl);
       const w=(r.winPct/maxW*100);
+      const path=(bestPath[r.pl]||[]);
+      const pathTxt=path.length?`Best path: ${path.join(" · ")}`:"";
       h+=`<div class="fc-row">
         <div class="fc-rank">${i+1}</div>
         <div class="fc-who">
@@ -641,6 +747,7 @@ function renderForecast(force){
         <div class="fc-barwrap"><div class="fc-bar" style="width:${w}%"></div></div>
         <div class="fc-pct">${r.winPct.toFixed(1)}<span>%</span></div>
         <div class="fc-avg">avg ${r.avg.toFixed(0)}</div>
+        ${pathTxt?`<div class="fc-path">${pathTxt}</div>`:""}
       </div>`;
     });
     const liveNote=anyMatchLive()
@@ -659,16 +766,16 @@ function flash(sel,msg){
   const orig=b.textContent; b.textContent=msg;
   setTimeout(()=>{b.textContent=orig;},1400);
 }
+function showView(v){
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view===v));
+  document.getElementById("standings").style.display=v==="standings"?"":"none";
+  document.getElementById("forecast").style.display=v==="forecast"?"":"none";
+  document.getElementById("admin").style.display=v==="admin"?"":"none";
+  document.getElementById("playerbracket").style.display=v==="playerbracket"?"":"none";
+  if(v==="forecast") renderForecast(false);
+}
 document.querySelectorAll(".tab").forEach(t=>{
-  t.onclick=()=>{
-    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
-    t.classList.add("on");
-    const v=t.dataset.view;
-    document.getElementById("standings").style.display=v==="standings"?"":"none";
-    document.getElementById("forecast").style.display=v==="forecast"?"":"none";
-    document.getElementById("admin").style.display=v==="admin"?"":"none";
-    if(v==="forecast") renderForecast(false);
-  };
+  t.onclick=()=>showView(t.dataset.view);
 });
 
 renderStandings();
