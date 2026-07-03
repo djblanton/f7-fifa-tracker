@@ -26,11 +26,42 @@
     --font:"Inter",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
     --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,monospace;
   }
+  :root[data-theme="light"]{
+    --ink:#f4f5f8;
+    --carbon:#ffffff;
+    --carbon2:#eef0f4;
+    --line:#dde1e8;
+    --line2:#c7cdd8;
+    --dim:#5b6474;
+    --text:#14161c;
+    --nitro:#0d9b78;
+    --nitro-dim:#bdf0e2;
+    --nitro-glow:rgba(13,155,120,.10);
+    --amber:#c2660a;
+    --red:#d63838;
+    --gold:#a97a00;
+    --purple:#6f47d6;
+  }
+  /* A handful of rules below use a hardcoded near-white text color for contrast against a colored
+     tint on the dark background — those need a dark equivalent so they stay legible on light. */
+  :root[data-theme="light"] .m .team.win{color:#0a5c46;}
+  :root[data-theme="light"] .m .team.win.locked{color:#4a2d99;}
+  :root[data-theme="light"] .m .team.hypo{color:#7a5400;}
+  :root[data-theme="light"] .pbox.correct{color:#0a5c46;}
+  :root[data-theme="light"] .pbox.wrong{color:#8a1f1f;}
+  :root[data-theme="light"] .fc-note{color:#6b4a26;}
+  :root[data-theme="light"] .row.p2 .rank{color:#7d8698;}
+  :root[data-theme="light"] .row.p2::before{background:#7d8698;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--font);min-height:100vh;
+  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--font);min-height:100vh;transition:background .2s,color .2s;
     background:
       radial-gradient(1000px 500px at 85% -10%, rgba(61,245,196,.05), transparent 60%),
       radial-gradient(800px 400px at 0% 110%, rgba(255,140,66,.04), transparent 55%),
+      var(--ink);}
+  :root[data-theme="light"] body{
+    background:
+      radial-gradient(1000px 500px at 85% -10%, rgba(13,155,120,.05), transparent 60%),
+      radial-gradient(800px 400px at 0% 110%, rgba(194,102,10,.04), transparent 55%),
       var(--ink);}
   .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px;}
 
@@ -41,10 +72,17 @@
   .brand .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--nitro);text-transform:uppercase;}
   .brand h1{margin:0;font-size:34px;font-weight:900;letter-spacing:-.03em;line-height:.95;
     background:linear-gradient(92deg,#fff 20%,var(--nitro) 120%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  :root[data-theme="light"] .brand h1{background:linear-gradient(92deg,#14161c 20%,var(--nitro) 120%);-webkit-background-clip:text;background-clip:text;}
   .brand .tag{color:var(--dim);font-size:12.5px;letter-spacing:.02em;}
-  .tabs{display:flex;gap:4px;background:var(--carbon);border:1px solid var(--line);border-radius:11px;padding:4px;}
+  .tabs{display:flex;gap:4px;background:var(--carbon);border:1px solid var(--line);border-radius:11px;padding:4px;
+    overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;}
+  .tabs::-webkit-scrollbar{display:none;}
   .tab{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
-    padding:8px 14px;border-radius:8px;cursor:pointer;border:none;background:transparent;transition:.15s;font-weight:600;}
+    padding:8px 14px;border-radius:8px;cursor:pointer;border:none;background:transparent;transition:.15s;font-weight:600;
+    white-space:nowrap;flex:0 0 auto;}
+  .themebtn{font-size:18px;background:var(--carbon);border:1px solid var(--line);border-radius:9px;
+    width:38px;height:38px;cursor:pointer;color:var(--text);transition:.15s;}
+  .themebtn:hover{border-color:var(--nitro);}
   .tab.on{background:var(--nitro);color:var(--ink);font-weight:800;}
 
   /* leaderboard */
@@ -148,6 +186,28 @@
     .fc-avg{display:none;}
   }
   .exp{font-family:var(--mono);font-size:11.5px;color:var(--dim);text-align:center;margin-top:14px;line-height:1.6;}
+  .tab-intro{color:var(--dim);font-size:13px;line-height:1.5;margin-bottom:16px;max-width:64ch;}
+
+  /* money match */
+  .mm-card{background:var(--carbon);border:1px solid var(--line);border-radius:13px;padding:16px 18px;margin-bottom:12px;}
+  .mm-card.top{border-color:var(--gold);background:rgba(255,209,92,.06);}
+  .mm-round{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;}
+  .mm-teams{font-size:16px;font-weight:800;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .mm-vs{font-family:var(--mono);font-size:10px;color:var(--dim);}
+  .mm-stakes{font-family:var(--mono);font-size:11px;color:var(--amber);margin-bottom:6px;}
+  .mm-sides{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--dim);}
+  .mm-sides b{color:var(--text);}
+
+  /* what-if sandbox */
+  .m .team.hypo{background:rgba(255,209,92,.15);border-color:var(--gold);color:#fff6da;font-weight:800;}
+  .m .team.hypo::after{content:"?";margin-left:auto;color:var(--gold);font-weight:800;}
+  .m .team.fixed{cursor:default;}
+  .m .team.fixed:hover{background:var(--carbon2);}
+
+  /* odds timeline */
+  #timelineSlider{-webkit-appearance:none;height:6px;border-radius:99px;background:var(--carbon2);outline:none;}
+  #timelineSlider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--nitro);cursor:pointer;}
+  #timelineSlider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--nitro);cursor:pointer;border:none;}
 
   /* player bracket drill-down */
   .pbrk-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line);}
@@ -186,13 +246,20 @@
       <button class="tab on" data-view="standings">Standings</button>
       <button class="tab" data-view="forecast">Forecast</button>
       <button class="tab" data-view="admin">Results</button>
+      <button class="tab" data-view="moneymatch">Money Match</button>
+      <button class="tab" data-view="whatif">What If</button>
+      <button class="tab" data-view="timeline">Odds Timeline</button>
     </div>
+    <button id="themeToggle" class="themebtn" title="Toggle light/dark">☀︎</button>
   </header>
 
   <div id="standings"></div>
   <div id="forecast" style="display:none;"></div>
   <div id="admin" class="admin" style="display:none;"></div>
   <div id="playerbracket" style="display:none;"></div>
+  <div id="moneymatch" style="display:none;"></div>
+  <div id="whatif" style="display:none;"></div>
+  <div id="timeline" style="display:none;"></div>
 
   <footer>
     <span id="foot-status">— matches scored —</span>
@@ -259,11 +326,15 @@ const PLAYERS={
 /* click the locked winner again to clear both the result and the lock. */
 const RESULTS_DEFAULT={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
 const LOCKED_DEFAULT={r32:Array(16).fill(false),r16:Array(8).fill(false),r8:Array(4).fill(false),r4:Array(2).fill(false),r2:Array(1).fill(false)};
+const DECIDED_AT_DEFAULT={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
+const WHATIF_DEFAULT={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
+// What-If sandbox state — intentionally not persisted; it's scratch space, reset on reload.
+let WHATIF=structuredClone(WHATIF_DEFAULT);
 const ESPN_STATUS_DEFAULT={lastPoll:null,lastError:null,lastWritten:0};
-const LS_KEY="f7wc_state_v2";
+const LS_KEY="f7wc_state_v3";
 
 function loadState(){
-  const fallback={results:structuredClone(RESULTS_DEFAULT),locked:structuredClone(LOCKED_DEFAULT),espn:structuredClone(ESPN_STATUS_DEFAULT)};
+  const fallback={results:structuredClone(RESULTS_DEFAULT),locked:structuredClone(LOCKED_DEFAULT),decidedAt:structuredClone(DECIDED_AT_DEFAULT),espn:structuredClone(ESPN_STATUS_DEFAULT)};
   try{
     const raw=localStorage.getItem(LS_KEY);
     if(!raw) return fallback;
@@ -273,15 +344,16 @@ function loadState(){
       if(!Array.isArray(parsed?.locked?.[r.key])||parsed.locked[r.key].length!==r.m) return fallback;
     }
     if(!parsed.espn) parsed.espn=structuredClone(ESPN_STATUS_DEFAULT);
+    if(!parsed.decidedAt) parsed.decidedAt=structuredClone(DECIDED_AT_DEFAULT);
     return parsed;
   }catch(e){ return fallback; }
 }
 function saveState(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify({results:RESULTS,locked:LOCKED,espn:ESPN_STATUS})); }
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({results:RESULTS,locked:LOCKED,decidedAt:DECIDED_AT,espn:ESPN_STATUS})); }
   catch(e){ /* storage full/blocked — state still lives in memory this session */ }
 }
 const _state=loadState();
-let RESULTS=_state.results, LOCKED=_state.locked, ESPN_STATUS=_state.espn;
+let RESULTS=_state.results, LOCKED=_state.locked, DECIDED_AT=_state.decidedAt, ESPN_STATUS=_state.espn;
 function saveResults(){ saveState(); }
 
 // Live/finished scoreboard cache — refreshed in full every poll, not persisted (ESPN is the source of truth for this).
@@ -355,6 +427,9 @@ async function pollEspn(){
         const fx=findFixture(fixtures,a,b);
         // scores refresh every poll regardless of lock, so the Results tab always shows the live state
         SCORES[r.key][mi]=fx?{a:fx.scores[a]??null, b:fx.scores[b]??null, state:fx.state, clockSeconds:fx.clockSeconds, date:fx.date}:null;
+        // ESPN always reports the true original fixture date, so this backfills correctly no matter
+        // when we happen to poll — Odds Timeline needs this to replay history in real chronological order.
+        if(fx && fx.completed) DECIDED_AT[r.key][mi]=fx.date;
         if(LOCKED[r.key][mi]) continue;           // human override — never touch RESULTS
         if(RESULTS[r.key][mi]!==null) continue;   // already resolved
         if(fx && fx.completed && fx.winner){
@@ -376,23 +451,29 @@ async function pollEspn(){
     renderAdmin(); renderStandings();
     const activeTab=document.querySelector(".tab.on")?.dataset.view;
     if(activeTab==="forecast") renderForecast(false);
+    if(activeTab==="moneymatch") renderMoneyMatch();
+    if(activeTab==="whatif") renderWhatIf();
+    if(activeTab==="timeline") renderTimeline();
   }
 }
 
 /* ============ ENGINE ============ */
+// Every engine function below takes an optional `res` results-object (defaults to the live RESULTS).
+// That's what lets the What-If sandbox and Odds Timeline replay run the exact same scoring logic
+// against a hypothetical or partial-history results set instead of duplicating it.
 // actual feeders for a results match: r32 from pairs, later from actual results
-function actualFeeders(ri,mi){
+function actualFeeders(ri,mi,res=RESULTS){
   if(ri===0)return R32_PAIRS[mi];
-  return [RESULTS[ROUNDS[ri-1].key][mi*2],RESULTS[ROUNDS[ri-1].key][mi*2+1]];
+  return [res[ROUNDS[ri-1].key][mi*2],res[ROUNDS[ri-1].key][mi*2+1]];
 }
 // a player's pick for (round, match)
 function pickAt(pl,ri,mi){return PLAYERS[pl][ROUNDS[ri].key][mi];}
 
 // EARNED: pick is correct if it matches the actual winner of that match slot
-function earned(pl){
+function earned(pl,res=RESULTS){
   let s=0;
   ROUNDS.forEach((r,ri)=>{
-    RESULTS[r.key].forEach((win,mi)=>{
+    res[r.key].forEach((win,mi)=>{
       if(win!==null && pickAt(pl,ri,mi)===win) s+=r.pts;
     });
   });
@@ -400,12 +481,12 @@ function earned(pl){
 }
 // STILL ALIVE: a player's pick for a slot is still possible if that team hasn't been eliminated
 // A team is eliminated if, in any completed match, it was a feeder but not the winner.
-function eliminatedTeams(){
+function eliminatedTeams(res=RESULTS){
   const dead=new Set();
   ROUNDS.forEach((r,ri)=>{
-    RESULTS[r.key].forEach((win,mi)=>{
+    res[r.key].forEach((win,mi)=>{
       if(win!==null){
-        const [a,b]=actualFeeders(ri,mi);
+        const [a,b]=actualFeeders(ri,mi,res);
         if(a&&a!==win)dead.add(a);
         if(b&&b!==win)dead.add(b);
       }
@@ -414,11 +495,11 @@ function eliminatedTeams(){
   return dead;
 }
 // MAX POSSIBLE = earned + sum of points for unplayed slots where the player's pick is still alive
-function maxPossible(pl){
-  const dead=eliminatedTeams();
+function maxPossible(pl,res=RESULTS){
+  const dead=eliminatedTeams(res);
   let s=0;
   ROUNDS.forEach((r,ri)=>{
-    RESULTS[r.key].forEach((win,mi)=>{
+    res[r.key].forEach((win,mi)=>{
       const pick=pickAt(pl,ri,mi);
       if(win!==null){ if(pick===win)s+=r.pts; }        // already earned
       else { if(!dead.has(pick))s+=r.pts; }             // still gettable
@@ -426,11 +507,11 @@ function maxPossible(pl){
   });
   return s;
 }
-function championAlive(pl){
-  return !eliminatedTeams().has(PLAYERS[pl].r2[0]);
+function championAlive(pl,res=RESULTS){
+  return !eliminatedTeams(res).has(PLAYERS[pl].r2[0]);
 }
-function matchesScored(){
-  let n=0;ROUNDS.forEach(r=>RESULTS[r.key].forEach(w=>{if(w!==null)n++;}));return n;
+function matchesScored(res=RESULTS){
+  let n=0;ROUNDS.forEach(r=>res[r.key].forEach(w=>{if(w!==null)n++;}));return n;
 }
 
 /* ============ RENDER: STANDINGS ============ */
@@ -593,7 +674,7 @@ function renderAdmin(){
   };
   el.querySelector("#resetState").onclick=()=>{
     if(!confirm("Clear ALL entered results? Your player brackets are untouched; this only wipes match outcomes and unlocks everything for ESPN auto-write."))return;
-    RESULTS=structuredClone(RESULTS_DEFAULT); LOCKED=structuredClone(LOCKED_DEFAULT); saveResults(); renderAdmin(); renderStandings();
+    RESULTS=structuredClone(RESULTS_DEFAULT); LOCKED=structuredClone(LOCKED_DEFAULT); DECIDED_AT=structuredClone(DECIDED_AT_DEFAULT); saveResults(); renderAdmin(); renderStandings();
   };
 
   el.querySelectorAll(".team[data-r]").forEach(node=>{
@@ -617,9 +698,179 @@ function cascadeResults(){
       const [a,b]=actualFeeders(ri,mi);
       const key=ROUNDS[ri].key;
       const cur=RESULTS[key][mi];
-      if(cur!==null && cur!==a && cur!==b){ RESULTS[key][mi]=null; LOCKED[key][mi]=false; }
+      if(cur!==null && cur!==a && cur!==b){ RESULTS[key][mi]=null; LOCKED[key][mi]=false; DECIDED_AT[key][mi]=null; }
     }
   }
+}
+
+/* ============ RENDER: MONEY MATCH ============ */
+// Deterministic (no simulation needed): for every still-open match, how much would the pool's
+// standings actually move between "team A wins" and "team B wins"? Only players whose own pick for
+// this exact slot is A or B are affected — if everyone picked the same team, the outcome doesn't
+// separate anyone, so it isn't a money match no matter how big the round's point value is.
+function computeMoneyMatches(){
+  const rows=[];
+  ROUNDS.forEach((r,ri)=>{
+    for(let mi=0;mi<r.m;mi++){
+      if(RESULTS[r.key][mi]!==null) continue;
+      const [a,b]=actualFeeders(ri,mi);
+      if(!a||!b) continue;
+      const deltas=Object.keys(PLAYERS).map(pl=>{
+        const pick=pickAt(pl,ri,mi);
+        return {pl, delta: pick===a?r.pts:(pick===b?-r.pts:0)};
+      });
+      const stakes=Math.max(...deltas.map(d=>d.delta)) - Math.min(...deltas.map(d=>d.delta));
+      if(stakes<=0) continue;
+      rows.push({
+        ri,mi,round:r.name,pts:r.pts,a,b,stakes,
+        forA:deltas.filter(d=>d.delta>0).map(d=>d.pl),
+        forB:deltas.filter(d=>d.delta<0).map(d=>d.pl),
+        sc:SCORES[r.key][mi],
+      });
+    }
+  });
+  rows.sort((a,b)=>b.stakes-a.stakes);
+  return rows;
+}
+function renderMoneyMatch(){
+  const el=document.getElementById("moneymatch");
+  const rows=computeMoneyMatches();
+  if(rows.length===0){
+    el.innerHTML=`<p class="tab-intro">Nothing splits the pool right now — either every open match has everyone picking the same team, or every match's already decided. Check back as new rounds open up.</p>`;
+    return;
+  }
+  let h=`<p class="tab-intro">The matches that will actually shuffle the standings — ranked by how many points separate the players rooting for each side. A lopsided pick (everyone agrees) doesn't move anyone; a split pick is where the real stakes are.</p>`;
+  rows.forEach((r,i)=>{
+    const live=r.sc&&r.sc.state==="in";
+    const scoreTxt = r.sc&&(r.sc.state==="in"||r.sc.state==="post") ? ` <span style="color:var(--dim)">(${r.sc.a}-${r.sc.b}${live?` · LIVE ${Math.min(90,Math.floor((r.sc.clockSeconds||0)/60))}'`:''})</span>` : "";
+    h+=`<div class="mm-card${i===0?" top":""}">
+      <div class="mm-round">${r.round} · ${r.pts} pts</div>
+      <div class="mm-teams">${FLAG[r.a]||"⚽"} ${r.a} <span class="mm-vs">vs</span> ${FLAG[r.b]||"⚽"} ${r.b}${scoreTxt}</div>
+      <div class="mm-stakes">${r.stakes} points could separate the pool depending on this result</div>
+      <div class="mm-sides">
+        <span>${r.a}: <b>${r.forA.length?r.forA.join(", "):"nobody"}</b></span>
+        <span>${r.b}: <b>${r.forB.length?r.forB.join(", "):"nobody"}</b></span>
+      </div>
+    </div>`;
+  });
+  el.innerHTML=h;
+}
+
+/* ============ RENDER: WHAT-IF SANDBOX ============ */
+function mergedResults(){
+  const merged={};
+  ROUNDS.forEach(r=>{ merged[r.key]=RESULTS[r.key].map((w,i)=> w!==null?w:WHATIF[r.key][i]); });
+  return merged;
+}
+function cascadeWhatIf(){
+  for(let ri=1;ri<ROUNDS.length;ri++){
+    for(let mi=0;mi<ROUNDS[ri].m;mi++){
+      const merged=mergedResults();
+      const [a,b]=actualFeeders(ri,mi,merged);
+      const key=ROUNDS[ri].key;
+      const cur=WHATIF[key][mi];
+      if(cur!==null && cur!==a && cur!==b) WHATIF[key][mi]=null;
+    }
+  }
+}
+function renderWhatIf(){
+  const el=document.getElementById("whatif");
+  const merged=mergedResults();
+  let h=`<p class="tab-intro">Pick hypothetical winners for matches that haven't happened yet and see how Standings would shift. Nothing here is saved or touches the real pool — it's a sandbox, reset it any time.</p>
+    <div class="statebar"><button class="sbtn" id="resetWhatIf">Reset sandbox</button></div>`;
+  ROUNDS.forEach((r,ri)=>{
+    h+=`<div class="rd"><h3>${r.name}</h3><div class="matchgrid">`;
+    for(let mi=0;mi<r.m;mi++){
+      const [a,b]=actualFeeders(ri,mi,merged);
+      const isReal=RESULTS[r.key][mi]!==null;
+      h+=`<div class="m">`;
+      [a,b].forEach(t=>{
+        if(t===null){h+=`<div class="team tbd">awaiting result</div>`;}
+        else{
+          const picked=merged[r.key][mi]===t;
+          let cls="";
+          if(isReal) cls = picked ? "win fixed" : "fixed";
+          else cls = picked ? "hypo" : "";
+          h+=`<div class="team${cls?" "+cls:""}"${isReal?"":` data-r="${ri}" data-m="${mi}" data-t="${t}"`}>
+            <span class="flag">${FLAG[t]||"⚽"}</span>${t}</div>`;
+        }
+      });
+      h+=`<div class="vs">▼</div></div>`;
+    }
+    h+=`</div></div>`;
+  });
+  const rows=Object.keys(PLAYERS).map(pl=>({pl, earned:earned(pl,merged), max:maxPossible(pl,merged)}));
+  rows.sort((a,b)=>b.earned-a.earned||b.max-a.max||a.pl.localeCompare(b.pl));
+  h+=`<div class="rd"><h3>Standings if this happens</h3><div class="board">`;
+  rows.forEach((r,i)=>{
+    h+=`<div class="row"><div class="rank">${i+1}</div>
+      <div class="who"><div class="nm">${r.pl}</div></div>
+      <div class="score"><div class="pts">${r.earned}</div><div class="ceil">ceiling <b>${r.max}</b></div></div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  el.innerHTML=h;
+  el.querySelector("#resetWhatIf").onclick=()=>{ WHATIF=structuredClone(WHATIF_DEFAULT); renderWhatIf(); };
+  el.querySelectorAll(".team[data-r]").forEach(node=>{
+    node.onclick=()=>{
+      const ri=+node.dataset.r,mi=+node.dataset.m,t=node.dataset.t;
+      const key=ROUNDS[ri].key;
+      WHATIF[key][mi]=(WHATIF[key][mi]===t)?null:t;
+      cascadeWhatIf();
+      renderWhatIf();
+    };
+  });
+}
+
+/* ============ RENDER: ODDS TIMELINE ============ */
+// Reconstructed purely from each result's real completion date (ESPN's true fixture date, backfilled
+// regardless of when we polled) — so this replays history as it actually happened, not as we happened
+// to observe it. Stepping the slider back genuinely hides later results from the standings math.
+function decidedEventsChronological(){
+  const events=[];
+  ROUNDS.forEach((r,ri)=>{
+    for(let mi=0;mi<r.m;mi++){
+      const dt=DECIDED_AT[r.key][mi];
+      if(dt && RESULTS[r.key][mi]!==null) events.push({ri,mi,key:r.key,round:r.name,winner:RESULTS[r.key][mi],date:dt});
+    }
+  });
+  events.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  return events;
+}
+function partialResultsUpTo(events,k){
+  const partial=structuredClone(RESULTS_DEFAULT);
+  for(let i=0;i<k;i++){ const e=events[i]; partial[e.key][e.mi]=e.winner; }
+  return partial;
+}
+let timelineStep=null;
+function renderTimeline(){
+  const el=document.getElementById("timeline");
+  const events=decidedEventsChronological();
+  if(events.length===0){
+    el.innerHTML=`<p class="tab-intro">No results yet — check back once the first match finishes and this'll let you replay the pool's story as it unfolds.</p>`;
+    return;
+  }
+  if(timelineStep===null) timelineStep=events.length;
+  const k=Math.max(0,Math.min(events.length,timelineStep));
+  const partial=partialResultsUpTo(events,k);
+  const rows=Object.keys(PLAYERS).map(pl=>({pl, earned:earned(pl,partial), max:maxPossible(pl,partial)}));
+  rows.sort((a,b)=>b.earned-a.earned||b.max-a.max||a.pl.localeCompare(b.pl));
+  const label = k===0
+    ? "Before any results — pre-tournament"
+    : `As of ${FLAG[events[k-1].winner]||"⚽"} ${events[k-1].winner} winning the ${events[k-1].round} · ${new Date(events[k-1].date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
+  let h=`<p class="tab-intro">Replay the pool's standings exactly as they unfolded, one real result at a time — reconstructed from each match's true completion date, as if you didn't know anything that happened after this point.</p>
+    <div class="espnstatus">${label}</div>
+    <input type="range" id="timelineSlider" min="0" max="${events.length}" value="${k}">
+    <div class="board" style="margin-top:16px;">`;
+  rows.forEach((r,i)=>{
+    h+=`<div class="row"><div class="rank">${i+1}</div>
+      <div class="who"><div class="nm">${r.pl}</div></div>
+      <div class="score"><div class="pts">${r.earned}</div><div class="ceil">ceiling <b>${r.max}</b></div></div>
+    </div>`;
+  });
+  h+=`</div>`;
+  el.innerHTML=h;
+  el.querySelector("#timelineSlider").oninput=(e)=>{ timelineStep=+e.target.value; renderTimeline(); };
 }
 
 /* ============ MONTE CARLO FORECAST ============ */
@@ -775,17 +1026,37 @@ function flash(sel,msg){
   const orig=b.textContent; b.textContent=msg;
   setTimeout(()=>{b.textContent=orig;},1400);
 }
+const VIEWS=["standings","forecast","admin","playerbracket","moneymatch","whatif","timeline"];
 function showView(v){
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x.dataset.view===v));
-  document.getElementById("standings").style.display=v==="standings"?"":"none";
-  document.getElementById("forecast").style.display=v==="forecast"?"":"none";
-  document.getElementById("admin").style.display=v==="admin"?"":"none";
-  document.getElementById("playerbracket").style.display=v==="playerbracket"?"":"none";
+  VIEWS.forEach(id=>{ document.getElementById(id).style.display=(id===v)?"":"none"; });
   if(v==="forecast") renderForecast(false);
+  if(v==="moneymatch") renderMoneyMatch();
+  if(v==="whatif") renderWhatIf();
+  if(v==="timeline") renderTimeline();
 }
 document.querySelectorAll(".tab").forEach(t=>{
   t.onclick=()=>showView(t.dataset.view);
 });
+
+/* ============ THEME TOGGLE ============ */
+const THEME_KEY="theme_pref";
+function applyTheme(t){
+  document.documentElement.dataset.theme=t;
+  document.getElementById("themeToggle").textContent = t==="light" ? "☾" : "☀︎";
+}
+function initTheme(){
+  let saved=null;
+  try{ saved=localStorage.getItem(THEME_KEY); }catch(e){}
+  const theme = saved || (window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  applyTheme(theme);
+}
+document.getElementById("themeToggle").onclick=()=>{
+  const next = document.documentElement.dataset.theme==="light" ? "dark" : "light";
+  applyTheme(next);
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+};
+initTheme();
 
 renderStandings();
 renderAdmin();
@@ -794,7 +1065,3 @@ setInterval(pollEspn, 120000);
 </script>
 </body>
 </html>
-
-
-
-
