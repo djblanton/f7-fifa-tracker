@@ -130,7 +130,8 @@
     background:var(--carbon);border:1px solid var(--line);border-radius:12px;padding:12px 15px;}
   .fc-rank{font-family:var(--mono);font-size:15px;font-weight:800;color:var(--dim);text-align:center;}
   .fc-who{min-width:0;}
-  .fc-nm{font-size:15px;font-weight:800;}
+  .fc-nm{font-size:15px;font-weight:800;cursor:pointer;width:fit-content;}
+  .fc-nm:hover{color:var(--nitro);text-decoration:underline;}
   .fc-champ{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .fc-out{color:var(--red);}
   .fc-barwrap{height:8px;background:var(--carbon2);border-radius:99px;overflow:hidden;}
@@ -705,8 +706,13 @@ function monteCarlo(N){
       const baseProb=(baseTally[id][team]||0)/N;
       return {ri:s.ri,mi:s.mi,team,delta:condProb-baseProb,condProb};
     }).filter(Boolean);
-    rows.sort((a,b)=>b.delta-a.delta);
-    bestPath[pl]=rows.slice(0,3).map(r=>describePathSlot(pl,r.ri,r.mi,r.team));
+    // a team required at the Final was necessarily also required at every round it passed through
+    // to get there — keep only the deepest (latest-round) mention of each team, or the story repeats itself
+    const deepestByTeam={};
+    rows.forEach(r=>{ const cur=deepestByTeam[r.team]; if(!cur||r.ri>cur.ri) deepestByTeam[r.team]=r; });
+    const deduped=Object.values(deepestByTeam);
+    deduped.sort((a,b)=>b.delta-a.delta);
+    bestPath[pl]=deduped.slice(0,3).map(r=>describePathSlot(pl,r.ri,r.mi,r.team));
   });
 
   const rows=names.map(pl=>({pl,winPct:100*wins[pl]/N,avg:scoreSum[pl]/N}))
@@ -741,7 +747,7 @@ function renderForecast(force){
       h+=`<div class="fc-row">
         <div class="fc-rank">${i+1}</div>
         <div class="fc-who">
-          <div class="fc-nm">${r.pl}</div>
+          <div class="fc-nm" data-pl="${r.pl}">${r.pl}</div>
           <div class="fc-champ">${FLAG[champ]} ${champ}${alive?"":' <span class="fc-out">eliminated</span>'}</div>
         </div>
         <div class="fc-barwrap"><div class="fc-bar" style="width:${w}%"></div></div>
@@ -757,6 +763,9 @@ function renderForecast(force){
       <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar. Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.${liveNote}</div>`;
     el.innerHTML=h;
     el.querySelector("#rerunFc").onclick=()=>renderForecast(true);
+    el.querySelectorAll(".fc-nm[data-pl]").forEach(node=>{
+      node.onclick=()=>{ renderPlayerBracket(node.dataset.pl); showView("playerbracket"); };
+    });
   },30);
 }
 
