@@ -23,6 +23,8 @@
     --red:#ff4d4d;
     --gold:#ffd15c;
     --purple:#a682ff;
+    /* categorical series colors, fixed order — identity, never reassigned by rank */
+    --s1:#3987e5; --s2:#199e70; --s3:#c98500; --s4:#008300; --s5:#9085e9; --s6:#e66767;
     --font:"Inter",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
     --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,monospace;
   }
@@ -41,6 +43,7 @@
     --red:#d63838;
     --gold:#a97a00;
     --purple:#6f47d6;
+    --s1:#2a78d6; --s2:#1baf7a; --s3:#eda100; --s4:#008300; --s5:#4a3aa7; --s6:#e34948;
   }
   /* A handful of rules below use a hardcoded near-white text color for contrast against a colored
      tint on the dark background — those need a dark equivalent so they stay legible on light. */
@@ -214,6 +217,31 @@
   #timelineSlider{-webkit-appearance:none;height:6px;border-radius:99px;background:var(--carbon2);outline:none;}
   #timelineSlider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--nitro);cursor:pointer;}
   #timelineSlider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--nitro);cursor:pointer;border:none;}
+
+  /* win% history chart */
+  .wp-card{background:var(--carbon);border:1px solid var(--line);border-radius:14px;padding:16px 16px 10px;margin-bottom:18px;}
+  .wp-title{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-bottom:2px;}
+  .wp-sub{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.03em;margin-bottom:10px;}
+  .wp-legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 2px 2px;font-family:var(--mono);font-size:11px;color:var(--dim);}
+  .wp-legend .key{display:inline-flex;align-items:center;gap:6px;}
+  .wp-legend .sw{width:12px;height:2px;border-radius:2px;display:inline-block;}
+  .wp-svg{width:100%;height:auto;display:block;overflow:visible;}
+  .wp-grid{stroke:var(--line);stroke-width:1;}
+  .wp-axis-lbl{font-family:var(--mono);font-size:9.5px;fill:var(--dim);}
+  .wp-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+  .wp-endlbl{font-family:var(--mono);font-size:10px;font-weight:700;fill:var(--text);}
+  .wp-pinline{stroke:var(--dim);stroke-width:1;stroke-dasharray:3,3;}
+  .wp-hoverline{stroke:var(--text);stroke-width:1;opacity:.35;pointer-events:none;}
+  .wp-dot{stroke:var(--carbon);stroke-width:2;pointer-events:none;}
+  .wp-tip{position:absolute;background:var(--carbon2);border:1px solid var(--line2);border-radius:9px;
+    padding:8px 10px;font-family:var(--mono);font-size:11px;pointer-events:none;white-space:nowrap;
+    box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5;}
+  .wp-tip .hd{color:var(--dim);margin-bottom:5px;font-size:10px;}
+  .wp-tip .row{display:flex;align-items:center;gap:7px;justify-content:space-between;padding:1.5px 0;}
+  .wp-tip .row .nm{color:var(--dim);}
+  .wp-tip .row .val{color:var(--text);font-weight:800;margin-left:14px;}
+  .wp-tip .key{width:10px;height:2px;border-radius:2px;display:inline-block;flex:0 0 auto;}
+  .wp-overlay{fill:transparent;cursor:crosshair;}
 
   /* player bracket drill-down */
   .pbrk-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line);}
@@ -707,7 +735,7 @@ function renderAdmin(){
   };
   el.querySelector("#resetState").onclick=()=>{
     if(!confirm("Clear ALL entered results? Your player brackets are untouched; this only wipes match outcomes and unlocks everything for ESPN auto-write."))return;
-    RESULTS=structuredClone(RESULTS_DEFAULT); LOCKED=structuredClone(LOCKED_DEFAULT); DECIDED_AT=structuredClone(DECIDED_AT_DEFAULT); saveResults(); renderAdmin(); renderStandings();
+    RESULTS=structuredClone(RESULTS_DEFAULT); LOCKED=structuredClone(LOCKED_DEFAULT); DECIDED_AT=structuredClone(DECIDED_AT_DEFAULT); winPctSeriesCache=null; saveResults(); renderAdmin(); renderStandings();
   };
 
   el.querySelectorAll(".team[data-r]").forEach(node=>{
@@ -734,6 +762,7 @@ function cascadeResults(){
       if(cur!==null && cur!==a && cur!==b){ RESULTS[key][mi]=null; LOCKED[key][mi]=false; DECIDED_AT[key][mi]=null; }
     }
   }
+  winPctSeriesCache=null; // called from every RESULTS-mutating path — cheapest single invalidation point
 }
 
 /* ============ RENDER: MONEY MATCH ============ */
@@ -875,35 +904,217 @@ function partialResultsUpTo(events,k){
   for(let i=0;i<k;i++){ const e=events[i]; partial[e.key][e.mi]=e.winner; }
   return partial;
 }
+
+/* ============ WIN% HISTORY CHART ============ */
+// Pure-Elo, no live/market adjustment — a historical checkpoint has neither a "right now"
+// scoreline nor a stored market snapshot, so replaying the past always uses the static Elo prior.
+function simOnceElo(res){
+  const out={};
+  out.r32=R32_PAIRS.map((pair,i)=>{
+    if(res.r32[i]!==null) return res.r32[i];
+    const[a,b]=pair;return Math.random()<winProb(a,b)?a:b;
+  });
+  for(let ri=1;ri<ROUNDS.length;ri++){
+    const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
+    for(let m=0;m<ROUNDS[ri].m;m++){
+      if(res[key][m]!==null){out[key].push(res[key][m]);continue;}
+      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<winProb(a,b)?a:b);
+    }
+  }
+  return out;
+}
+function winPctAt(res,N){
+  const names=Object.keys(PLAYERS);
+  const wins={};names.forEach(n=>wins[n]=0);
+  for(let i=0;i<N;i++){
+    const outcome=simOnceElo(res);
+    let best=-1,leaders=[];
+    names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);
+      if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
+    leaders.forEach(pl=>wins[pl]+=1/leaders.length);
+  }
+  const out={};names.forEach(n=>out[n]=100*wins[n]/N);
+  return out;
+}
+// One Monte Carlo pass per historical checkpoint. Elo-only (no path-tracking, no live/market
+// branch) so it's cheap enough to brute-force every step; cached and invalidated alongside
+// forecastCache by the same result-writing call sites (see cascadeResults).
+function computeWinPctSeries(events,N){
+  const points=[];
+  for(let k=0;k<=events.length;k++){
+    const e=k>0?events[k-1]:null;
+    points.push({k, date:e?e.date:null, roundKey:e?e.key:null, roundName:e?e.round:null,
+      winner:e?e.winner:null, pct:winPctAt(partialResultsUpTo(events,k),N)});
+  }
+  return points;
+}
+const WP_W=900,WP_H=260,WP_PAD_L=30,WP_PAD_R=54,WP_PAD_T=14,WP_PAD_B=22;
+const WP_ROUND_SHORT={r32:"R32",r16:"R16",r8:"QF",r4:"SF",r2:"F"};
+function renderWinPctCard(points,k){
+  const names=Object.keys(PLAYERS);
+  const n=points.length;
+  const plotW=WP_W-WP_PAD_L-WP_PAD_R, plotH=WP_H-WP_PAD_T-WP_PAD_B;
+  const xForK=kk=>WP_PAD_L+kk*(plotW/(n-1));
+  const yForPct=p=>WP_PAD_T+(100-p)/100*plotH;
+
+  let grid="";
+  [0,25,50,75,100].forEach(v=>{
+    const y=yForPct(v);
+    grid+=`<line class="wp-grid" x1="${WP_PAD_L}" x2="${WP_W-WP_PAD_R}" y1="${y}" y2="${y}"/>
+      <text class="wp-axis-lbl" x="2" y="${y+3}">${v}%</text>`;
+  });
+  let vgrid="";
+  ROUNDS.forEach(r=>{
+    let last=-1;
+    points.forEach((p,i)=>{ if(p.roundKey===r.key) last=i; });
+    if(last>=0){
+      const x=xForK(last);
+      vgrid+=`<line class="wp-grid" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${WP_PAD_T}" y2="${WP_H-WP_PAD_B}"/>
+        <text class="wp-axis-lbl" x="${x.toFixed(1)}" y="${WP_H-6}" text-anchor="middle">${WP_ROUND_SHORT[r.key]}</text>`;
+    }
+  });
+
+  const last=points[n-1];
+  const endYs=names.map((nm,i)=>({nm,y:yForPct(last.pct[nm])}));
+  const sortedY=[...endYs].sort((a,b)=>a.y-b.y);
+  const suppressed=new Set();
+  for(let i=1;i<sortedY.length;i++){
+    if(sortedY[i].y-sortedY[i-1].y<9){ suppressed.add(sortedY[i-1].nm); suppressed.add(sortedY[i].nm); }
+  }
+  let lines="",endMarks="";
+  names.forEach((nm,i)=>{
+    const color=`var(--s${i+1})`;
+    const d=points.map((p,kk)=>`${kk===0?"M":"L"}${xForK(kk).toFixed(1)},${yForPct(p.pct[nm]).toFixed(1)}`).join(" ");
+    lines+=`<path class="wp-line" d="${d}" stroke="${color}"/>`;
+    const ex=xForK(n-1), ey=yForPct(last.pct[nm]);
+    endMarks+=`<circle class="wp-dot" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}"/>`;
+    if(!suppressed.has(nm)) endMarks+=`<text class="wp-endlbl" x="${(ex+8).toFixed(1)}" y="${(ey+3.5).toFixed(1)}">${nm}</text>`;
+  });
+
+  const pinX=xForK(k);
+  const pin=`<line class="wp-pinline" x1="${pinX.toFixed(1)}" x2="${pinX.toFixed(1)}" y1="${WP_PAD_T}" y2="${WP_H-WP_PAD_B}"/>`
+    + names.map((nm,i)=>`<circle class="wp-dot" cx="${pinX.toFixed(1)}" cy="${yForPct(points[k].pct[nm]).toFixed(1)}" r="4" fill="var(--s${i+1})"/>`).join("");
+
+  const hover=`<g id="wpHover" style="opacity:0">
+      <line class="wp-hoverline" x1="0" x2="0" y1="${WP_PAD_T}" y2="${WP_H-WP_PAD_B}"/>
+      ${names.map((nm,i)=>`<circle class="wp-dot" r="4" fill="var(--s${i+1})" data-series="${nm}"/>`).join("")}
+    </g>`;
+
+  const legend=names.map((nm,i)=>`<span class="key"><span class="sw" style="background:var(--s${i+1})"></span>${nm}</span>`).join("");
+
+  return `<div class="wp-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div class="wp-title">Championship win% over time</div>
+          <div class="wp-sub">Elo-only Monte Carlo replay at each real result · ${WP_SIMS.toLocaleString()} sims/step · hover to explore</div>
+        </div>
+        <button class="sbtn" id="wpRerun">Re-run</button>
+      </div>
+      <div style="position:relative;" id="wpWrap">
+        <svg class="wp-svg" viewBox="0 0 ${WP_W} ${WP_H}" id="wpSvg">
+          ${grid}${vgrid}${lines}${pin}${endMarks}${hover}
+          <rect class="wp-overlay" id="wpOverlay" x="${WP_PAD_L}" y="0" width="${plotW}" height="${WP_H}"/>
+        </svg>
+      </div>
+      <div class="wp-legend">${legend}</div>
+    </div>`;
+}
+function wireWinPctChart(container,points){
+  const svg=container.querySelector("#wpSvg");
+  const overlay=container.querySelector("#wpOverlay");
+  const hoverGroup=container.querySelector("#wpHover");
+  const hoverLine=hoverGroup.querySelector(".wp-hoverline");
+  const hoverDots=[...hoverGroup.querySelectorAll("circle")];
+  const wrap=container.querySelector("#wpWrap");
+  const rerunBtn=container.querySelector("#wpRerun");
+  if(rerunBtn) rerunBtn.onclick=()=>{ winPctSeriesCache=null; renderTimeline(); };
+
+  const names=Object.keys(PLAYERS);
+  const n=points.length;
+  const plotW=WP_W-WP_PAD_L-WP_PAD_R;
+  const xForK=kk=>WP_PAD_L+kk*(plotW/(n-1));
+  const yForPct=p=>WP_PAD_T+(100-p)/100*(WP_H-WP_PAD_T-WP_PAD_B);
+
+  let tip=null;
+  function ensureTip(){
+    if(!tip){ tip=document.createElement("div"); tip.className="wp-tip"; wrap.appendChild(tip); }
+    return tip;
+  }
+  function showAt(clientX,clientY,kk){
+    const p=points[kk], x=xForK(kk);
+    hoverLine.setAttribute("x1",x);hoverLine.setAttribute("x2",x);
+    hoverDots.forEach(dot=>{
+      const nm=dot.dataset.series;
+      dot.setAttribute("cx",x);dot.setAttribute("cy",yForPct(p.pct[nm]));
+    });
+    hoverGroup.style.opacity=1;
+    const t=ensureTip();
+    const hd=kk===0?"Pre-tournament":`${p.winner} wins the ${p.roundName}`;
+    const rowsData=names.map((nm,i)=>({nm,i,pct:p.pct[nm]})).sort((a,b)=>b.pct-a.pct);
+    let rowsHtml="";
+    rowsData.forEach(r=>{
+      rowsHtml+=`<div class="row"><span style="display:flex;align-items:center;gap:6px;"><span class="key" style="background:var(--s${r.i+1})"></span><span class="nm">${r.nm}</span></span><span class="val">${r.pct.toFixed(1)}%</span></div>`;
+    });
+    t.innerHTML=`<div class="hd">${hd}</div>${rowsHtml}`;
+    const wrapRect=wrap.getBoundingClientRect();
+    let left=clientX-wrapRect.left+14, top=clientY-wrapRect.top-10;
+    const tw=t.offsetWidth||150, th=t.offsetHeight||120;
+    if(left+tw>wrapRect.width) left=clientX-wrapRect.left-tw-14;
+    if(left<0) left=0;
+    if(top+th>wrapRect.height) top=wrapRect.height-th;
+    if(top<0) top=0;
+    t.style.left=left+"px";t.style.top=top+"px";
+  }
+  function hide(){ hoverGroup.style.opacity=0; if(tip){tip.remove();tip=null;} }
+  overlay.addEventListener("pointermove",(e)=>{
+    const rect=svg.getBoundingClientRect();
+    const svgX=(e.clientX-rect.left)/rect.width*WP_W;
+    const kk=Math.max(0,Math.min(n-1,Math.round((svgX-WP_PAD_L)/(plotW/(n-1)))));
+    showAt(e.clientX,e.clientY,kk);
+  });
+  overlay.addEventListener("pointerleave",hide);
+}
+
+const WP_SIMS=3000;
+let winPctSeriesCache=null; // {eventsLen, points} — invalidated by cascadeResults() and resetState
 let timelineStep=null;
-function renderTimeline(){
+function renderTimeline(force){
   const el=document.getElementById("timeline");
   const events=decidedEventsChronological();
   if(events.length===0){
-    el.innerHTML=`<p class="tab-intro">No results yet — check back once the first match finishes and this'll let you replay the pool's story as it unfolds.</p>`;
+    el.innerHTML=`<p class="tab-intro">No results yet — check back once the first match finishes and this'll let you replay the pool's story — and its win% swings — as it unfolds.</p>`;
     return;
   }
-  if(timelineStep===null) timelineStep=events.length;
-  const k=Math.max(0,Math.min(events.length,timelineStep));
-  const partial=partialResultsUpTo(events,k);
-  const rows=Object.keys(PLAYERS).map(pl=>({pl, earned:earned(pl,partial), max:maxPossible(pl,partial)}));
-  rows.sort((a,b)=>b.earned-a.earned||b.max-a.max||a.pl.localeCompare(b.pl));
-  const label = k===0
-    ? "Before any results — pre-tournament"
-    : `As of ${FLAG[events[k-1].winner]||"⚽"} ${events[k-1].winner} winning the ${events[k-1].round} · ${new Date(events[k-1].date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
-  let h=`<p class="tab-intro">Replay the pool's standings exactly as they unfolded, one real result at a time — reconstructed from each match's true completion date, as if you didn't know anything that happened after this point.</p>
-    <div class="espnstatus">${label}</div>
-    <input type="range" id="timelineSlider" min="0" max="${events.length}" value="${k}">
-    <div class="board" style="margin-top:16px;">`;
-  rows.forEach((r,i)=>{
-    h+=`<div class="row"><div class="rank">${i+1}</div>
-      <div class="who"><div class="nm">${r.pl}</div></div>
-      <div class="score"><div class="pts">${r.earned}</div><div class="ceil">ceiling <b>${r.max}</b></div></div>
-    </div>`;
-  });
-  h+=`</div>`;
-  el.innerHTML=h;
-  el.querySelector("#timelineSlider").oninput=(e)=>{ timelineStep=+e.target.value; renderTimeline(); };
+  el.innerHTML=`<p class="tab-intro">Crunching win% history…</p>`;
+  setTimeout(()=>{
+    if(force||!winPctSeriesCache||winPctSeriesCache.eventsLen!==events.length){
+      winPctSeriesCache={eventsLen:events.length, points:computeWinPctSeries(events,WP_SIMS)};
+    }
+    const points=winPctSeriesCache.points;
+    if(timelineStep===null) timelineStep=events.length;
+    const k=Math.max(0,Math.min(events.length,timelineStep));
+    const partial=partialResultsUpTo(events,k);
+    const rows=Object.keys(PLAYERS).map(pl=>({pl, earned:earned(pl,partial), max:maxPossible(pl,partial)}));
+    rows.sort((a,b)=>b.earned-a.earned||b.max-a.max||a.pl.localeCompare(b.pl));
+    const label = k===0
+      ? "Before any results — pre-tournament"
+      : `As of ${FLAG[events[k-1].winner]||"⚽"} ${events[k-1].winner} winning the ${events[k-1].round} · ${new Date(events[k-1].date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
+    let h=`<p class="tab-intro">Replay the pool's standings exactly as they unfolded, one real result at a time — reconstructed from each match's true completion date, as if you didn't know anything that happened after this point.</p>`;
+    h+=renderWinPctCard(points,k);
+    h+=`<div class="espnstatus">${label}</div>
+      <input type="range" id="timelineSlider" min="0" max="${events.length}" value="${k}">
+      <div class="board" style="margin-top:16px;">`;
+    rows.forEach((r,i)=>{
+      h+=`<div class="row"><div class="rank">${i+1}</div>
+        <div class="who"><div class="nm">${r.pl}</div></div>
+        <div class="score"><div class="pts">${r.earned}</div><div class="ceil">ceiling <b>${r.max}</b></div></div>
+      </div>`;
+    });
+    h+=`</div>`;
+    el.innerHTML=h;
+    el.querySelector("#timelineSlider").oninput=(e)=>{ timelineStep=+e.target.value; renderTimeline(); };
+    wireWinPctChart(el,points);
+  },30);
 }
 
 /* ============ MONTE CARLO FORECAST ============ */
