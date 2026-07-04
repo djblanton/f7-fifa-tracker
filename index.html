@@ -906,19 +906,34 @@ function partialResultsUpTo(events,k){
 }
 
 /* ============ WIN% HISTORY CHART ============ */
-// Pure-Elo, no live/market adjustment — a historical checkpoint has neither a "right now"
-// scoreline nor a stored market snapshot, so replaying the past always uses the static Elo prior.
-function simOnceElo(res){
+// Market prior for a REPLAYED (partial-history) simulation. ODDS is keyed by today's real,
+// currently-locked bracket — but a simulated trajectory over a partial-results snapshot can send
+// hypothetical teams into a slot that, in reality, ended up holding different teams. Applying
+// today's real line to whichever teams the simulation happens to land there would misattribute a
+// real bookmaker's number to the wrong matchup. So this only trusts ODDS when the simulated path
+// has exactly reproduced today's actual bracket up through this slot; otherwise it falls back to
+// Elo, same silent-fallback pattern as basePrior() uses for slots with no market yet.
+function basePriorForReplay(ri,mi,a,b){
+  if(FORECAST_MODE==="market"){
+    const mkt=ODDS[ROUNDS[ri].key][mi];
+    if(mkt){
+      const[ra,rb]=actualFeeders(ri,mi);
+      if(a===ra && b===rb) return mkt.a;
+    }
+  }
+  return winProb(a,b);
+}
+function simOnceReplay(res){
   const out={};
   out.r32=R32_PAIRS.map((pair,i)=>{
     if(res.r32[i]!==null) return res.r32[i];
-    const[a,b]=pair;return Math.random()<winProb(a,b)?a:b;
+    const[a,b]=pair;return Math.random()<basePriorForReplay(0,i,a,b)?a:b;
   });
   for(let ri=1;ri<ROUNDS.length;ri++){
     const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
     for(let m=0;m<ROUNDS[ri].m;m++){
       if(res[key][m]!==null){out[key].push(res[key][m]);continue;}
-      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<winProb(a,b)?a:b);
+      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<basePriorForReplay(ri,m,a,b)?a:b);
     }
   }
   return out;
@@ -927,7 +942,7 @@ function winPctAt(res,N){
   const names=Object.keys(PLAYERS);
   const wins={};names.forEach(n=>wins[n]=0);
   for(let i=0;i<N;i++){
-    const outcome=simOnceElo(res);
+    const outcome=simOnceReplay(res);
     let best=-1,leaders=[];
     names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);
       if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
@@ -936,9 +951,9 @@ function winPctAt(res,N){
   const out={};names.forEach(n=>out[n]=100*wins[n]/N);
   return out;
 }
-// One Monte Carlo pass per historical checkpoint. Elo-only (no path-tracking, no live/market
-// branch) so it's cheap enough to brute-force every step; cached and invalidated alongside
-// forecastCache by the same result-writing call sites (see cascadeResults).
+// One Monte Carlo pass per historical checkpoint. No path-tracking, so it's cheap enough to
+// brute-force every step; cached and invalidated alongside forecastCache — both by the
+// result-writing call sites (see cascadeResults) and by setForecastMode().
 function computeWinPctSeries(events,N){
   const points=[];
   for(let k=0;k<=events.length;k++){
@@ -1001,14 +1016,24 @@ function renderWinPctCard(points,k){
     </g>`;
 
   const legend=names.map((nm,i)=>`<span class="key"><span class="sw" style="background:var(--s${i+1})"></span>${nm}</span>`).join("");
+  const modeLabel=FORECAST_MODE==="market"?"Elo + live market":"Elo-only";
+  const marketNote=FORECAST_MODE==="market"
+    ? `<div class="fc-note" style="margin-top:12px;">Market mode only reaches slots whose simulated path exactly matches today's real bracket — it can't know what DraftKings would've posted for a matchup that (in this sample) never actually happened. So the shape of the past barely moves; what shifts is the projection for what's still left to decide, exactly like the Forecast tab.</div>`
+    : "";
 
   return `<div class="wp-card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
           <div class="wp-title">Championship win% over time</div>
-          <div class="wp-sub">Elo-only Monte Carlo replay at each real result · ${WP_SIMS.toLocaleString()} sims/step · hover to explore</div>
+          <div class="wp-sub">${modeLabel} Monte Carlo replay at each real result · ${WP_SIMS.toLocaleString()} sims/step · hover to explore</div>
         </div>
-        <button class="sbtn" id="wpRerun">Re-run</button>
+        <div class="fc-headright">
+          <div class="fc-modes">
+            <button class="fc-mode${FORECAST_MODE==="elo"?" on":""}" id="wpModeElo">Elo</button>
+            <button class="fc-mode${FORECAST_MODE==="market"?" on":""}" id="wpModeMarket">Market</button>
+          </div>
+          <button class="sbtn" id="wpRerun">Re-run</button>
+        </div>
       </div>
       <div style="position:relative;" id="wpWrap">
         <svg class="wp-svg" viewBox="0 0 ${WP_W} ${WP_H}" id="wpSvg">
@@ -1017,6 +1042,7 @@ function renderWinPctCard(points,k){
         </svg>
       </div>
       <div class="wp-legend">${legend}</div>
+      ${marketNote}
     </div>`;
 }
 function wireWinPctChart(container,points){
@@ -1028,6 +1054,8 @@ function wireWinPctChart(container,points){
   const wrap=container.querySelector("#wpWrap");
   const rerunBtn=container.querySelector("#wpRerun");
   if(rerunBtn) rerunBtn.onclick=()=>{ winPctSeriesCache=null; renderTimeline(); };
+  container.querySelector("#wpModeElo").onclick=()=>{ if(FORECAST_MODE!=="elo"){ setForecastMode("elo"); renderTimeline(true); } };
+  container.querySelector("#wpModeMarket").onclick=()=>{ if(FORECAST_MODE!=="market"){ setForecastMode("market"); renderTimeline(true); } };
 
   const names=Object.keys(PLAYERS);
   const n=points.length;
@@ -1128,6 +1156,7 @@ function setForecastMode(mode){
   FORECAST_MODE=mode;
   try{ localStorage.setItem(FORECAST_MODE_KEY, mode); }catch(e){}
   forecastCache=null;
+  winPctSeriesCache=null;
 }
 function basePrior(ri,mi,a,b){
   if(FORECAST_MODE==="market"){
