@@ -161,6 +161,12 @@
   /* forecast */
   .fc-intro{color:var(--dim);font-family:var(--mono);font-size:13px;padding:20px 2px;}
   .fc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 14px;flex-wrap:wrap;}
+  .fc-headright{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .fc-modes{display:flex;gap:3px;background:var(--carbon);border:1px solid var(--line);border-radius:9px;padding:3px;}
+  .fc-mode{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);
+    background:transparent;border:none;border-radius:7px;padding:7px 11px;cursor:pointer;transition:.15s;}
+  .fc-mode:hover{color:var(--text);}
+  .fc-mode.on{background:var(--nitro);color:var(--ink);font-weight:800;}
   .fc-title{font-size:20px;font-weight:800;letter-spacing:-.01em;}
   .fc-sub{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.04em;margin-top:3px;}
   .fc-board{display:flex;flex-direction:column;gap:8px;}
@@ -358,6 +364,9 @@ function saveResults(){ saveState(); }
 
 // Live/finished scoreboard cache — refreshed in full every poll, not persisted (ESPN is the source of truth for this).
 let SCORES={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
+// DraftKings win probabilities per slot, keyed the same way as SCORES — {a,b} win probs matching
+// actualFeeders(ri,mi) order. null until both real teams are locked in AND DK has posted a line.
+let ODDS={r32:Array(16).fill(null),r16:Array(8).fill(null),r8:Array(4).fill(null),r4:Array(2).fill(null),r2:Array(1).fill(null)};
 
 /* ============ ESPN ADAPTER ============ */
 // ESPN displayName -> this bracket's team name. Only entry needed: the rest of the 32 already match.
@@ -388,7 +397,24 @@ function rollingWindow(){
   return {start:ESPN_KNOCKOUT_START, end};
 }
 
-// Flatten ESPN's scoreboard payload into fixtures, live or finished: {teams, scores, state, clockSeconds, winner, date}
+// American odds -> implied probability, e.g. -225 -> .692, +750 -> .118.
+function americanToImplied(odds){
+  const n=typeof odds==="string"?parseFloat(odds):odds;
+  if(!isFinite(n)) return null;
+  return n>0 ? 100/(n+100) : -n/(-n+100);
+}
+// DraftKings 3-way moneyline (home/draw/away) -> de-vigged 2-way win probs by team name,
+// splitting the draw's probability mass 50/50 into each side's win column.
+function moneylineToWinProbs(dkOdds,homeTeam,awayTeam){
+  const ml=dkOdds?.moneyline; if(!ml||!homeTeam||!awayTeam) return null;
+  const pHome=americanToImplied(ml.home?.close?.odds??ml.home?.open?.odds);
+  const pAway=americanToImplied(ml.away?.close?.odds??ml.away?.open?.odds);
+  const pDraw=americanToImplied(ml.draw?.close?.odds??ml.draw?.open?.odds);
+  if(pHome==null||pAway==null||pDraw==null) return null;
+  const sum=pHome+pAway+pDraw; // sum > 1 is the house vig; dividing it out de-vigs
+  return {[homeTeam]:(pHome+pDraw/2)/sum, [awayTeam]:(pAway+pDraw/2)/sum};
+}
+// Flatten ESPN's scoreboard payload into fixtures, live or finished: {teams, scores, state, clockSeconds, winner, date, odds}
 function extractFixtures(data){
   const out=[];
   for(const ev of (data.events||[])){
@@ -402,7 +428,12 @@ function extractFixtures(data){
     const scores={};
     competitors.forEach((c,i)=>{ scores[teams[i]]=c.score!=null?parseInt(c.score,10):null; });
     const winnerComp=competitors.find(c=>c.winner===true);
-    out.push({teams, scores, state, clockSeconds, winner:winnerComp?normalizeTeam(winnerComp.team.displayName):null, completed, date:comp.date||ev.date});
+    const homeC=competitors.find(c=>c.homeAway==="home"), awayC=competitors.find(c=>c.homeAway==="away");
+    const dkOdds=(comp.odds||[]).find(o=>o?.provider?.name==="DraftKings");
+    const odds=dkOdds&&homeC&&awayC
+      ?moneylineToWinProbs(dkOdds, normalizeTeam(homeC.team?.displayName||""), normalizeTeam(awayC.team?.displayName||""))
+      :null;
+    out.push({teams, scores, state, clockSeconds, winner:winnerComp?normalizeTeam(winnerComp.team.displayName):null, completed, date:comp.date||ev.date, odds});
   }
   return out;
 }
@@ -423,10 +454,12 @@ async function pollEspn(){
     ROUNDS.forEach((r,ri)=>{
       for(let mi=0;mi<r.m;mi++){
         const [a,b]=actualFeeders(ri,mi);
-        if(!a||!b){ SCORES[r.key][mi]=null; continue; }  // feeders not known yet this pass
+        if(!a||!b){ SCORES[r.key][mi]=null; ODDS[r.key][mi]=null; continue; }  // feeders not known yet this pass
         const fx=findFixture(fixtures,a,b);
         // scores refresh every poll regardless of lock, so the Results tab always shows the live state
         SCORES[r.key][mi]=fx?{a:fx.scores[a]??null, b:fx.scores[b]??null, state:fx.state, clockSeconds:fx.clockSeconds, date:fx.date}:null;
+        // market prior refreshes every poll too — DK odds move right up until kickoff
+        ODDS[r.key][mi]=(fx&&fx.odds&&fx.odds[a]!=null&&fx.odds[b]!=null)?{a:fx.odds[a],b:fx.odds[b]}:null;
         // ESPN always reports the true original fixture date, so this backfills correctly no matter
         // when we happen to poll — Odds Timeline needs this to replay history in real chronological order.
         if(fx && fx.completed) DECIDED_AT[r.key][mi]=fx.date;
@@ -440,7 +473,7 @@ async function pollEspn(){
       }
     });
     if(written>0) cascadeResults();
-    forecastCache=null; // live scores/clocks change even without a new written result
+    forecastCache=null; // live scores/clocks/market odds all change even without a new written result
     ESPN_STATUS={lastPoll:new Date().toISOString(), lastError:null, lastWritten:written};
     saveState();
   }catch(e){
@@ -874,12 +907,29 @@ function renderTimeline(){
 }
 
 /* ============ MONTE CARLO FORECAST ============ */
-// Live-adjusted win probability for a match in progress: blends the pre-match Elo prior with the
+// Forecast mode: "elo" (static Elo table, works for any hypothetical matchup) or "market" (real
+// DraftKings odds via the ESPN feed, de-vigged and with the draw split 50/50 to a match winner —
+// only exists for slots where both real teams are already locked in; everything deeper/hypothetical
+// in the bracket has no market yet and silently falls back to Elo either way).
+const FORECAST_MODE_KEY="forecast_mode_pref";
+let FORECAST_MODE=(()=>{ try{ return localStorage.getItem(FORECAST_MODE_KEY)||"elo"; }catch(e){ return "elo"; } })();
+function setForecastMode(mode){
+  FORECAST_MODE=mode;
+  try{ localStorage.setItem(FORECAST_MODE_KEY, mode); }catch(e){}
+  forecastCache=null;
+}
+function basePrior(ri,mi,a,b){
+  if(FORECAST_MODE==="market"){
+    const mkt=ODDS[ROUNDS[ri].key][mi];
+    if(mkt && mkt.a!=null && mkt.b!=null) return mkt.a;
+  }
+  return winProb(a,b);
+}
+// Live-adjusted win probability for a match in progress: blends the prior (Elo or market) with the
 // current scoreline, weighted by how much of the match has elapsed (a lead late means more than the
 // same lead early). This is a simple heuristic, not a calibrated live-soccer win model.
 const LIVE_GOAL_WEIGHT=1.1;
-function liveWinProb(a,b,sc){
-  const prior=winProb(a,b);
+function liveWinProb(prior,sc){
   const priorLogOdds=Math.log(prior/(1-prior));
   const minutesElapsed=Math.max(0,(sc.clockSeconds||0)/60);
   const timeFrac=Math.min(1,minutesElapsed/90);
@@ -890,8 +940,9 @@ function liveWinProb(a,b,sc){
 }
 function effectiveProb(ri,mi,a,b){
   const sc=SCORES[ROUNDS[ri].key][mi];
-  if(sc && sc.state==="in" && sc.a!=null && sc.b!=null) return liveWinProb(a,b,sc);
-  return winProb(a,b);
+  const prior=basePrior(ri,mi,a,b);
+  if(sc && sc.state==="in" && sc.a!=null && sc.b!=null) return liveWinProb(prior,sc);
+  return prior;
 }
 function anyMatchLive(){
   return ROUNDS.some(r=>SCORES[r.key].some(sc=>sc&&sc.state==="in"));
@@ -981,12 +1032,22 @@ function renderForecast(force){
     const {rows:res, bestPath}=forecastCache;
     const maxW=Math.max(...res.map(r=>r.winPct),1);
     const played=matchesScored();
+    const openSlots=[];
+    ROUNDS.forEach(r=>{ for(let mi=0;mi<r.m;mi++){ if(RESULTS[r.key][mi]===null) openSlots.push({key:r.key,mi}); } });
+    const withMarket=openSlots.filter(s=>ODDS[s.key][s.mi]!=null).length;
+    const modeLabel=FORECAST_MODE==="market"?"Market-weighted":"Elo-weighted";
     let h=`<div class="fc-head">
         <div>
           <div class="fc-title">Championship odds</div>
-          <div class="fc-sub">${played===0?"Pre-tournament forecast":`Updated for ${played} played result${played>1?"s":""}`} · 20k Monte Carlo sims · Elo-weighted</div>
+          <div class="fc-sub">${played===0?"Pre-tournament forecast":`Updated for ${played} played result${played>1?"s":""}`} · 20k Monte Carlo sims · ${modeLabel}</div>
         </div>
-        <button class="sbtn" id="rerunFc">Re-run</button>
+        <div class="fc-headright">
+          <div class="fc-modes">
+            <button class="fc-mode${FORECAST_MODE==="elo"?" on":""}" id="fcModeElo">Elo</button>
+            <button class="fc-mode${FORECAST_MODE==="market"?" on":""}" id="fcModeMarket">Market</button>
+          </div>
+          <button class="sbtn" id="rerunFc">Re-run</button>
+        </div>
       </div>
       <div class="fc-board">`;
     res.forEach((r,i)=>{
@@ -1008,12 +1069,17 @@ function renderForecast(force){
       </div>`;
     });
     const liveNote=anyMatchLive()
-      ? ` A match is live right now — its sim odds are nudged from Elo toward the current scoreline as the clock runs down (a heuristic, not a calibrated live-win model), so the forecast reflects what's actually happening on the pitch.`
+      ? ` A match is live right now — its sim odds are nudged from the prior toward the current scoreline as the clock runs down (a heuristic, not a calibrated live-win model), so the forecast reflects what's actually happening on the pitch.`
       : "";
+    const modeNote=FORECAST_MODE==="market"
+      ? ` Using de-vigged DraftKings lines for ${withMarket} of ${openSlots.length} open match${openSlots.length===1?"":"es"} with a posted market; ${openSlots.length-withMarket} deeper/hypothetical slot${(openSlots.length-withMarket)===1?"":"s"} without a line yet fall back to Elo.`
+      : ` Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.`;
     h+=`</div>
-      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar. Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.${liveNote}</div>`;
+      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar.${modeNote}${liveNote}</div>`;
     el.innerHTML=h;
     el.querySelector("#rerunFc").onclick=()=>renderForecast(true);
+    el.querySelector("#fcModeElo").onclick=()=>{ if(FORECAST_MODE!=="elo"){ setForecastMode("elo"); renderForecast(true); } };
+    el.querySelector("#fcModeMarket").onclick=()=>{ if(FORECAST_MODE!=="market"){ setForecastMode("market"); renderForecast(true); } };
     el.querySelectorAll(".fc-nm[data-pl]").forEach(node=>{
       node.onclick=()=>{ renderPlayerBracket(node.dataset.pl); showView("playerbracket"); };
     });
