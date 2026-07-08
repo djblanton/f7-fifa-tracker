@@ -1213,6 +1213,15 @@ function describePathSlot(pl,ri,mi,team){
   if(team===theirPick) return `${team} wins the ${roundName}`;
   const [a,b]=actualFeeders(ri,mi);
   if(a&&b&&(theirPick===a||theirPick===b)) return `${theirPick===a?b:a} beats ${theirPick} (${roundName})`;
+  // Real feeders for this slot aren't locked in yet, so actualFeeders can't confirm theirPick even
+  // gets here — but if theirPick is also this player's own pick for one of the two rounds feeding
+  // this slot, their own bracket already assumes they arrive. Reporting "doesn't make it" would then
+  // contradict whatever this same player's best-path entry for that earlier round says (e.g. "wins
+  // the Quarterfinals" right next to "doesn't make the Semifinals"). The honest story there is a
+  // loss at THIS round, not a failure to arrive.
+  if(ri>0 && [pickAt(pl,ri-1,mi*2),pickAt(pl,ri-1,mi*2+1)].includes(theirPick)){
+    return `${team||"their opponent"} beats ${theirPick} (${roundName})`;
+  }
   return `${theirPick} doesn't make the ${roundName}`;
 }
 function monteCarlo(N){
