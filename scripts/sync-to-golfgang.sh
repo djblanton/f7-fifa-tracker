@@ -46,6 +46,24 @@ PATCH_DIR=$(mktemp -d)
 trap 'rm -rf "$PATCH_DIR"' EXIT
 git format-patch "$TAG"..HEAD -o "$PATCH_DIR" >/dev/null
 
+# Commits marked "f7-pool-only" in their message are intentionally never
+# ported (e.g. this script — golf-gang-pool is a sync target, not a source,
+# so it has no use for a script that syncs FROM f7-pool). Drop those patches
+# but still treat them as handled so the tag moves past them.
+for f in "$PATCH_DIR"/*.patch; do
+  if grep -qi "f7-pool-only" "$f"; then
+    echo "Skipping $(basename "$f") — marked f7-pool-only"
+    rm "$f"
+  fi
+done
+
+if ! ls "$PATCH_DIR"/*.patch >/dev/null 2>&1; then
+  echo "Nothing left to port (remaining commits were all f7-pool-only)."
+  git -C "$F7_DIR" tag -f "$TAG" HEAD
+  git -C "$F7_DIR" push origin "$TAG" -f
+  exit 0
+fi
+
 cd "$GG_DIR"
 if ! git am "$PATCH_DIR"/*.patch; then
   git am --abort
