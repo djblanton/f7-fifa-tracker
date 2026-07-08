@@ -923,37 +923,95 @@ function basePriorForReplay(ri,mi,a,b){
   }
   return winProb(a,b);
 }
-function simOnceReplay(res){
+/* ---- shared win-probability engine ------------------------------------------------------
+   Every still-undecided match is one binary branch, so from any position there are exactly
+   2^(open slots) complete tournaments. Once that count is small we walk ALL of them and get
+   exact win probabilities — no sampling noise, no Re-run jitter, and faster than a Monte Carlo
+   run. Above the threshold (early rounds, up to billions of outcomes) we sample instead. Both
+   the live Forecast and the timeline replay go through winStats(); they differ only in the
+   probFn they pass and whether they need best-path tallies. */
+const ENUM_MAX_OPEN=16; // 2^16 = 65,536 leaves — a few ms to score; more than this, sample
+
+function openSlotList(res){
+  const open=[];
+  ROUNDS.forEach((r,ri)=>{ for(let mi=0;mi<r.m;mi++){ if(res[r.key][mi]===null) open.push({ri,key:r.key,mi}); } });
+  return open;
+}
+// One sampled tournament from position `res`; probFn(ri,mi,a,b) = P(a beats b).
+function simWith(res, probFn){
   const out={};
-  out.r32=R32_PAIRS.map((pair,i)=>{
-    if(res.r32[i]!==null) return res.r32[i];
-    const[a,b]=pair;return Math.random()<basePriorForReplay(0,i,a,b)?a:b;
-  });
+  out.r32=R32_PAIRS.map((pair,i)=>{ if(res.r32[i]!==null) return res.r32[i];
+    const[a,b]=pair; return Math.random()<probFn(0,i,a,b)?a:b; });
   for(let ri=1;ri<ROUNDS.length;ri++){
-    const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
+    const prev=out[ROUNDS[ri-1].key], key=ROUNDS[ri].key; out[key]=[];
     for(let m=0;m<ROUNDS[ri].m;m++){
-      if(res[key][m]!==null){out[key].push(res[key][m]);continue;}
-      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<basePriorForReplay(ri,m,a,b)?a:b);
+      if(res[key][m]!==null){ out[key].push(res[key][m]); continue; }
+      const a=prev[m*2], b=prev[m*2+1]; out[key].push(Math.random()<probFn(ri,m,a,b)?a:b);
     }
   }
   return out;
 }
-function winPctAt(res,N){
+// Win probability + expected score (+ optional best-path tallies) for every player from `res`.
+// Weights are real branch probabilities in exact mode and 1/N per sample in MC mode, so the
+// accumulation below is identical either way and every tally lands as a probability summing to 1.
+function winStats(res, probFn, opts){
+  opts=opts||{};
+  const trackPath=!!opts.trackPath, N=opts.N||20000;
   const names=Object.keys(PLAYERS);
-  const wins={};names.forEach(n=>wins[n]=0);
-  for(let i=0;i<N;i++){
-    const outcome=simOnceReplay(res);
-    let best=-1,leaders=[];
-    names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);
-      if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
-    leaders.forEach(pl=>wins[pl]+=1/leaders.length);
+  const open=openSlotList(res);
+  const exact=open.length<=ENUM_MAX_OPEN;
+  const slotId=s=>`${s.key}:${s.mi}`;
+
+  const winProb={}, avgScore={}; names.forEach(n=>{winProb[n]=0; avgScore[n]=0;});
+  const baseTally=trackPath?{}:null, pathTally=trackPath?{}:null;
+  if(trackPath){
+    open.forEach(s=>baseTally[slotId(s)]={});
+    names.forEach(pl=>{ pathTally[pl]={}; open.forEach(s=>pathTally[pl][slotId(s)]={}); });
   }
-  const out={};names.forEach(n=>out[n]=100*wins[n]/N);
-  return out;
+
+  function tally(outcome, w){
+    let best=-Infinity, leaders=[];
+    names.forEach(pl=>{ const s=scoreVsOutcome(pl,outcome); avgScore[pl]+=s*w;
+      if(s>best){ best=s; leaders=[pl]; } else if(s===best){ leaders.push(pl); } });
+    const share=w/leaders.length;
+    leaders.forEach(pl=>winProb[pl]+=share);
+    if(trackPath){
+      open.forEach(s=>{ const team=outcome[s.key][s.mi], id=slotId(s);
+        baseTally[id][team]=(baseTally[id][team]||0)+w;
+        leaders.forEach(pl=>{ const t=pathTally[pl][id]; t[team]=(t[team]||0)+share; });
+      });
+    }
+  }
+
+  if(exact){
+    // Fill open slots in round order; feeders of a slot are always resolved by the time we reach
+    // it (they sit at an earlier round = lower index). tally() consumes `cur` synchronously, so
+    // one shared mutable copy is safe — no per-leaf clone.
+    const cur=structuredClone(res);
+    (function recurse(idx, w){
+      if(idx===open.length){ tally(cur, w); return; }
+      const s=open[idx];
+      const [a,b]=actualFeeders(s.ri, s.mi, cur);
+      const pa=probFn(s.ri, s.mi, a, b);
+      cur[s.key][s.mi]=a; recurse(idx+1, w*pa);
+      cur[s.key][s.mi]=b; recurse(idx+1, w*(1-pa));
+      cur[s.key][s.mi]=null;
+    })(0, 1);
+  } else {
+    for(let i=0;i<N;i++) tally(simWith(res, probFn), 1/N);
+  }
+
+  return {names, open, slotId, winProb, avgScore, baseTally, pathTally, exact,
+          outcomes: exact?Math.pow(2,open.length):N};
 }
-// One Monte Carlo pass per historical checkpoint. No path-tracking, so it's cheap enough to
-// brute-force every step; cached and invalidated alongside forecastCache — both by the
-// result-writing call sites (see cascadeResults) and by setForecastMode().
+function winPctAt(res,N){
+  const st=winStats(res, basePriorForReplay, {trackPath:false, N});
+  const out={}; st.names.forEach(n=>out[n]=100*st.winProb[n]); return out;
+}
+// One winStats pass per historical checkpoint. Later checkpoints (few teams left) resolve exactly;
+// early ones (many teams left) sample with N. No path-tracking, so it's cheap enough to do every
+// step; cached and invalidated alongside forecastCache — both by the result-writing call sites
+// (see cascadeResults) and by setForecastMode().
 function computeWinPctSeries(events,N){
   const points=[];
   for(let k=0;k<=events.length;k++){
@@ -1025,7 +1083,7 @@ function renderWinPctCard(points,k){
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
           <div class="wp-title">Championship win% over time</div>
-          <div class="wp-sub">${modeLabel} Monte Carlo replay at each real result · ${WP_SIMS.toLocaleString()} sims/step · hover to explore</div>
+          <div class="wp-sub">${modeLabel} replay at each real result · exact once few teams remain, ${WP_SIMS.toLocaleString()} sims/step earlier · hover to explore</div>
         </div>
         <div class="fc-headright">
           <div class="fc-modes">
@@ -1187,21 +1245,6 @@ function effectiveProb(ri,mi,a,b){
 function anyMatchLive(){
   return ROUNDS.some(r=>SCORES[r.key].some(sc=>sc&&sc.state==="in"));
 }
-function simOnce(){
-  const out={};
-  out.r32=R32_PAIRS.map((pair,i)=>{
-    if(RESULTS.r32[i]!==null)return RESULTS.r32[i];
-    const[a,b]=pair;return Math.random()<effectiveProb(0,i,a,b)?a:b;
-  });
-  for(let ri=1;ri<ROUNDS.length;ri++){
-    const prev=out[ROUNDS[ri-1].key],key=ROUNDS[ri].key;out[key]=[];
-    for(let m=0;m<ROUNDS[ri].m;m++){
-      if(RESULTS[key][m]!==null){out[key].push(RESULTS[key][m]);continue;}
-      const a=prev[m*2],b=prev[m*2+1];out[key].push(Math.random()<effectiveProb(ri,m,a,b)?a:b);
-    }
-  }
-  return out;
-}
 function scoreVsOutcome(pl,outcome){
   let s=0;ROUNDS.forEach(r=>{for(let m=0;m<r.m;m++){if(PLAYERS[pl][r.key][m]===outcome[r.key][m])s+=r.pts;}});return s;
 }
@@ -1224,38 +1267,20 @@ function describePathSlot(pl,ri,mi,team){
   }
   return `${theirPick} doesn't make the ${roundName}`;
 }
-function monteCarlo(N){
-  const names=Object.keys(PLAYERS);
-  const wins={},scoreSum={};names.forEach(n=>{wins[n]=0;scoreSum[n]=0;});
-  const openSlots=[];
-  ROUNDS.forEach((r,ri)=>{ for(let mi=0;mi<r.m;mi++){ if(RESULTS[r.key][mi]===null) openSlots.push({ri,key:r.key,mi}); } });
-  const slotId=s=>`${s.key}:${s.mi}`;
-  const baseTally={}; openSlots.forEach(s=>baseTally[slotId(s)]={});
-  const pathTally={}; names.forEach(pl=>{ pathTally[pl]={}; openSlots.forEach(s=>pathTally[pl][slotId(s)]={}); });
-
-  for(let i=0;i<N;i++){
-    const outcome=simOnce();let best=-1,leaders=[];
-    names.forEach(pl=>{const s=scoreVsOutcome(pl,outcome);scoreSum[pl]+=s;
-      if(s>best){best=s;leaders=[pl];}else if(s===best){leaders.push(pl);}});
-    leaders.forEach(pl=>wins[pl]+=1/leaders.length);
-    openSlots.forEach(s=>{
-      const team=outcome[s.key][s.mi], id=slotId(s);
-      baseTally[id][team]=(baseTally[id][team]||0)+1;
-      leaders.forEach(pl=>{ const t=pathTally[pl][id]; t[team]=(t[team]||0)+1; });
-    });
-  }
-
+// Best-path story per player from a winStats result: for each open slot, compare
+// P(team fills slot | player wins pool) against the unconditional P(team fills slot); the biggest
+// gaps are the results that matter most to that player. Exact tallies when winStats enumerated.
+function buildBestPath(st){
   const bestPath={};
-  names.forEach(pl=>{
-    const denom=wins[pl];
-    const rows=openSlots.map(s=>{
-      const id=slotId(s), tally=pathTally[pl][id];
-      let team=null,count=0;
-      for(const t in tally){ if(tally[t]>count){count=tally[t];team=t;} }
+  st.names.forEach(pl=>{
+    const denom=st.winProb[pl];
+    const rows=st.open.map(s=>{
+      const id=st.slotId(s), teamTally=st.pathTally[pl][id];
+      let team=null, w=0;
+      for(const t in teamTally){ if(teamTally[t]>w){ w=teamTally[t]; team=t; } }
       if(!team||denom<=0) return null;
-      const condProb=count/denom;
-      const baseProb=(baseTally[id][team]||0)/N;
-      return {ri:s.ri,mi:s.mi,team,delta:condProb-baseProb,condProb};
+      const condProb=w/denom, baseProb=st.baseTally[id][team]||0;
+      return {ri:s.ri, mi:s.mi, team, delta:condProb-baseProb, condProb};
     }).filter(Boolean);
     // a team required at the Final was necessarily also required at every round it passed through
     // to get there — keep only the deepest (latest-round) mention of each team, or the story repeats itself
@@ -1265,30 +1290,36 @@ function monteCarlo(N){
     deduped.sort((a,b)=>b.delta-a.delta);
     bestPath[pl]=deduped.slice(0,3).map(r=>describePathSlot(pl,r.ri,r.mi,r.team));
   });
-
-  const rows=names.map(pl=>({pl,winPct:100*wins[pl]/N,avg:scoreSum[pl]/N}))
-              .sort((a,b)=>b.winPct-a.winPct);
-  return {rows, bestPath};
+  return bestPath;
+}
+function monteCarlo(N){
+  const st=winStats(RESULTS, effectiveProb, {trackPath:true, N});
+  const rows=st.names.map(pl=>({pl, winPct:100*st.winProb[pl], avg:st.avgScore[pl]}))
+    .sort((a,b)=>b.winPct-a.winPct);
+  return {rows, bestPath:buildBestPath(st), exact:st.exact, outcomes:st.outcomes};
 }
 
 let forecastCache=null;
 function renderForecast(force){
   const el=document.getElementById("forecast");
-  el.innerHTML=`<p class="fc-intro">Running 20,000 simulations…</p>`;
+  el.innerHTML=`<p class="fc-intro">Crunching the forecast…</p>`;
   // defer so the "running" message paints
   setTimeout(()=>{
     if(force||!forecastCache) forecastCache=monteCarlo(20000);
-    const {rows:res, bestPath}=forecastCache;
+    const {rows:res, bestPath, exact, outcomes}=forecastCache;
     const maxW=Math.max(...res.map(r=>r.winPct),1);
     const played=matchesScored();
     const openSlots=[];
     ROUNDS.forEach(r=>{ for(let mi=0;mi<r.m;mi++){ if(RESULTS[r.key][mi]===null) openSlots.push({key:r.key,mi}); } });
     const withMarket=openSlots.filter(s=>ODDS[s.key][s.mi]!=null).length;
     const modeLabel=FORECAST_MODE==="market"?"Market-weighted":"Elo-weighted";
+    const methodLabel=exact
+      ? `exact · all ${outcomes.toLocaleString()} possible outcomes`
+      : `${Math.round(outcomes/1000)}k Monte Carlo sims`;
     let h=`<div class="fc-head">
         <div>
           <div class="fc-title">Championship odds</div>
-          <div class="fc-sub">${played===0?"Pre-tournament forecast":`Updated for ${played} played result${played>1?"s":""}`} · 20k Monte Carlo sims · ${modeLabel}</div>
+          <div class="fc-sub">${played===0?"Pre-tournament forecast":`Updated for ${played} played result${played>1?"s":""}`} · ${methodLabel} · ${modeLabel}</div>
         </div>
         <div class="fc-headright">
           <div class="fc-modes">
@@ -1323,8 +1354,11 @@ function renderForecast(force){
     const modeNote=FORECAST_MODE==="market"
       ? ` Using de-vigged DraftKings lines for ${withMarket} of ${openSlots.length} open match${openSlots.length===1?"":"es"} with a posted market; ${openSlots.length-withMarket} deeper/hypothetical slot${(openSlots.length-withMarket)===1?"":"s"} without a line yet fall back to Elo.`
       : ` Elo ratings put Argentina, Spain and France within ~10 points at the top — treat the favorite as a genuine toss-up, not a lock.`;
+    const methodNote=exact
+      ? ` With only ${outcomes.toLocaleString()} ways the rest of the bracket can play out, this is the exact answer — every outcome weighted by its probability, no sampling — so Re-run won't budge it.`
+      : "";
     h+=`</div>
-      <div class="fc-note">Win% = share of simulations where that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar.${modeNote}${liveNote}</div>`;
+      <div class="fc-note">Win% = probability that player finishes first (ties split). Driven mostly by the champion pick, since the brackets are highly similar.${methodNote}${modeNote}${liveNote}</div>`;
     el.innerHTML=h;
     el.querySelector("#rerunFc").onclick=()=>renderForecast(true);
     el.querySelector("#fcModeElo").onclick=()=>{ if(FORECAST_MODE!=="elo"){ setForecastMode("elo"); renderForecast(true); } };
