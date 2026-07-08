@@ -23,6 +23,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Syntax-check embedded JS
+        run: |
+          node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('index.html', 'utf8');
+            const m = html.match(/<script>([\s\S]*?)<\/script>/);
+            if (!m) { console.error('No <script> block found in index.html'); process.exit(1); }
+            fs.writeFileSync('/tmp/embedded.js', m[1]);
+          "
+          node --check /tmp/embedded.js
+          echo "Syntax OK"
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
